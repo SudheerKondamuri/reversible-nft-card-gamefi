@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  # TODO: Add blockchain node service (if needed)
+
+  # Hardhat development environment
+  hardhat:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    ports:
+      - "8545:8545"  # JSON-RPC
+      - "8546:8546"  # WebSocket
+    environment:
+      NODE_ENV: development
+      # TODO: Add environment variables
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npx hardhat node
+
+  # TODO: Add backend service (if applicable)
+  # backend:
+  #   build:
+  #     context: ./backend
+  #   ports:
+  #     - "3000:3000"
+  #   depends_on:
+  #     - hardhat
+
+  # TODO: Add frontend service (if applicable)
+  # frontend:
+  #   build:
+  #     context: ./frontend
+  #   ports:
+  #     - "3001:3001"
+  #   depends_on:
+  #     - backend
+
+  # TODO: Add IPFS service for metadata (if needed)
+  # ipfs:
+  #   image: ipfs/go-ipfs:latest
+  #   ports:
+  #     - "5001:5001"
+  #     - "8080:8080"
+
+volumes:
+  # Define volumes if needed
+  # ipfs_data:
+  # blockchain_data:
+
+networks:
+  default:
+    name: gamefi-network
