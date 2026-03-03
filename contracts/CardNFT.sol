@@ -1,148 +1,137 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Enumerable.sol";
-import "@openzeppelin/contracts/token/ERC721/extensions/ERC721Burnable.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
-
 import "./interfaces/ICardNFT.sol";
-import "./libraries/ElementMatrix.sol";
-import "./libraries/AttributeCalculator.sol";
-import "./libraries/RarityLogic.sol";
 
-/**
- * @title CardNFT
- * @dev NFT card with reversible fusion mechanics for GameFi
- */
-contract CardNFT is
-    ERC721,
-    ERC721Enumerable,
-    ERC721Burnable,
-    Ownable,
-    ICardNFT
-{
-    // State variables
-    mapping(uint256 => Card) public cards;
-    uint256 public cardCounter;
+contract CardNFT is ERC721, Ownable, ICardNFT {
 
-    // Constructor
-    constructor() ERC721("Card NFT", "CARD") {}
+    uint256 private _tokenIdCounter;
 
-    /**
-     * @dev Mint a new card
-     * @param to Recipient address
-     * @param element Card element type
-     * @param rarity Card rarity tier
-     * @return tokenId Minted card ID
-     */
-    function mint(
+    mapping(uint256 => Card) private _cards;
+    mapping(uint8 => uint256) private _supplyByRarity;
+    mapping(string => uint256) private _supplyByElement;
+
+    // Track authorized minters/burners (e.g. CombinationManager)
+    mapping(address => bool) public isManager;
+
+    modifier onlyManagerOrOwner() {
+        require(owner() == _msgSender() || isManager[_msgSender()], "Not authorized");
+        _;
+    }
+
+    constructor() 
+        ERC721("GameFiCard", "GFC") 
+        Ownable(msg.sender) 
+    {}
+
+    function setManager(address manager, bool status) external onlyOwner {
+        isManager[manager] = status;
+    }
+
+    function _mintCardInternal(
         address to,
-        uint8 element,
-        uint8 rarity
-    ) external onlyOwner returns (uint256) {
-        // TODO: Implement minting logic
-        uint256 tokenId = cardCounter++;
+        string memory name,
+        uint8 rarity,
+        string memory element,
+        uint16 attack,
+        uint16 defense,
+        string memory ability,
+        uint8 generation
+    ) internal returns (uint256) {
+        require(rarity >= 1 && rarity <= 4, "Invalid rarity");
+        require(attack > 0 && defense > 0, "Invalid stats");
+
+        _tokenIdCounter++;
+        uint256 tokenId = _tokenIdCounter;
+
         _safeMint(to, tokenId);
 
-        Card storage card = cards[tokenId];
-        card.element = element;
-        card.rarity = rarity;
-        card.isComposite = false;
+        _cards[tokenId] = Card({
+            name: name,
+            rarity: rarity,
+            element: element,
+            attack: attack,
+            defense: defense,
+            ability: ability,
+            generation: generation
+        });
 
-        (card.power, card.defense) = AttributeCalculator.getBaseStats(rarity);
+        _supplyByRarity[rarity]++;
+        _supplyByElement[element]++;
 
-        emit CardMinted(to, tokenId, element, rarity);
+        emit CardMinted(tokenId, to, name, rarity, element);
+        emit SupplyUpdated(rarity, _supplyByRarity[rarity]);
+
         return tokenId;
     }
 
-    /**
-     * @dev Fuse multiple cards into one composite card
-     * @param cardIds Array of card IDs to fuse
-     * @return newTokenId ID of the resulting composite card
-     */
-    function fuse(uint256[] calldata cardIds) external returns (uint256) {
-        // TODO: Implement fusion logic
-        require(cardIds.length >= 2, "Minimum 2 cards required for fusion");
-
-        // Check ownership and validity
-        for (uint256 i = 0; i < cardIds.length; i++) {
-            require(ownerOf(cardIds[i]) == msg.sender, "Not card owner");
-        }
-
-        // Create composite card
-        uint256 newTokenId = cardCounter++;
-        _safeMint(msg.sender, newTokenId);
-
-        Card storage newCard = cards[newTokenId];
-        newCard.isComposite = true;
-        newCard.fusedCards = cardIds;
-
-        // TODO: Calculate attributes from fused cards
-
-        emit CardFused(cardIds, newTokenId);
-        return newTokenId;
+    function mintCard(
+        address to,
+        string memory name,
+        uint8 rarity,
+        string memory element,
+        uint16 attack,
+        uint16 defense,
+        string memory ability
+    ) external onlyManagerOrOwner returns (uint256) {
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, 0);
     }
 
-    /**
-     * @dev Reverse a composite card back to original components
-     * @param tokenId ID of composite card to reverse
-     * @return componentTokenIds Array of original card IDs
-     */
-    function reverse(uint256 tokenId) external returns (uint256[] memory) {
-        // TODO: Implement reverse logic
-        require(ownerOf(tokenId) == msg.sender, "Not card owner");
-        require(cards[tokenId].isComposite, "Card is not composite");
+    function mintCardWithGen(
+        address to,
+        string memory name,
+        uint8 rarity,
+        string memory element,
+        uint16 attack,
+        uint16 defense,
+        string memory ability,
+        uint8 generation
+    ) external onlyManagerOrOwner returns (uint256) {
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, generation);
+    }
 
-        uint256[] memory components = cards[tokenId].fusedCards;
+    function burn(uint256 tokenId) external onlyManagerOrOwner {
+        Card memory card = _cards[tokenId];
 
-        // Burn composite card
+        _supplyByRarity[card.rarity]--;
+        _supplyByElement[card.element]--;
+
+        delete _cards[tokenId];
+
         _burn(tokenId);
 
-        emit CardReversed(tokenId, components);
-        return components;
+        emit CardBurned(tokenId);
+        emit SupplyUpdated(card.rarity, _supplyByRarity[card.rarity]);
     }
 
-    /**
-     * @dev Get card data
-     * @param tokenId Card ID
-     * @return Card struct
-     */
-    function getCard(uint256 tokenId) external view returns (Card memory) {
-        require(_exists(tokenId), "Card does not exist");
-        return cards[tokenId];
+    function getCardAttributes(uint256 tokenId) 
+        external view returns (
+            string memory name,
+            uint8 rarity,
+            string memory element,
+            uint16 attack,
+            uint16 defense,
+            string memory ability,
+            uint8 generation
+        ) 
+    {
+        // will revert if not minted (OpenZeppelin 5 requires ownerOf checks)
+        require(_ownerOf(tokenId) != address(0), "Nonexistent token");
+        Card memory card = _cards[tokenId];
+        return (card.name, card.rarity, card.element, card.attack, card.defense, card.ability, card.generation);
     }
 
-    /**
-     * @dev Get card attributes
-     * @param tokenId Card ID
-     * @return power Card power value
-     * @return defense Card defense value
-     */
-    function getCardAttributes(
-        uint256 tokenId
-    ) external view returns (uint8 power, uint8 defense) {
-        require(_exists(tokenId), "Card does not exist");
-        return (cards[tokenId].power, cards[tokenId].defense);
+    function getTotalSupplyByRarity(uint8 rarity) external view returns (uint256) {
+        return _supplyByRarity[rarity];
     }
 
-    // Internal overrides
-    function _beforeTokenTransfer(
-        address from,
-        address to,
-        uint256 tokenId,
-        uint256 batchSize
-    ) internal override(ERC721, ERC721Enumerable) {
-        super._beforeTokenTransfer(from, to, tokenId, batchSize);
+    function getTotalSupplyByElement(string memory element) external view returns (uint256) {
+        return _supplyByElement[element];
     }
 
-    function _burn(uint256 tokenId) internal override(ERC721, ERC721Burnable) {
-        super._burn(tokenId);
-    }
-
-    function supportsInterface(
-        bytes4 interfaceId
-    ) public view override(ERC721, ERC721Enumerable) returns (bool) {
-        return super.supportsInterface(interfaceId);
+    function totalMinted() external view returns (uint256) {
+        return _tokenIdCounter;
     }
 }
