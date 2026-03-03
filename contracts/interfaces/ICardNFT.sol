@@ -1,53 +1,68 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
-/**
- * @title ICardNFT
- * @dev Interface for Card NFT with reversible fusion mechanics
- */
-interface ICardNFT {
-    // Events
-    event CardMinted(
-        address indexed to,
-        uint256 indexed tokenId,
-        uint8 element,
-        uint8 rarity
-    );
-    event CardFused(uint256[] indexed tokenIds, uint256 indexed newTokenId);
-    event CardReversed(
-        uint256 indexed tokenId,
-        uint256[] indexed componentTokenIds
-    );
-    event AttributesUpdated(
-        uint256 indexed tokenId,
-        uint8 power,
-        uint8 defense
-    );
+import "@openzeppelin/contracts/token/ERC721/IERC721.sol";
 
-    // Card Struct
+interface ICardNFT is IERC721 {
     struct Card {
-        uint8 element;
+        string name;
         uint8 rarity;
-        uint8 power;
-        uint8 defense;
-        uint256[] fusedCards;
-        bool isComposite;
+        string element;
+        uint16 attack;
+        uint16 defense;
+        string ability;
+        uint8 generation;
     }
 
-    // Core Functions
-    function mint(
+    event CardMinted(
+        uint256 indexed tokenId,
+        address indexed owner,
+        string name,
+        uint8 rarity,
+        string element
+    );
+
+    event CardBurned(uint256 indexed tokenId);
+
+    event SupplyUpdated(
+        uint8 indexed rarity,
+        uint256 newSupply
+    );
+
+    function mintCard(
         address to,
-        uint8 element,
-        uint8 rarity
+        string memory name,
+        uint8 rarity,
+        string memory element,
+        uint16 attack,
+        uint16 defense,
+        string memory ability
     ) external returns (uint256);
 
-    function fuse(uint256[] calldata cardIds) external returns (uint256);
+    function mintCardWithGen(
+        address to,
+        string memory name,
+        uint8 rarity,
+        string memory element,
+        uint16 attack,
+        uint16 defense,
+        string memory ability,
+        uint8 generation
+    ) external returns (uint256);
 
-    function reverse(uint256 tokenId) external returns (uint256[] memory);
+    function burn(uint256 tokenId) external;
 
-    function getCard(uint256 tokenId) external view returns (Card memory);
+    function getCardAttributes(uint256 tokenId) 
+        external view returns (
+            string memory name,
+            uint8 rarity,
+            string memory element,
+            uint16 attack,
+            uint16 defense,
+            string memory ability,
+            uint8 generation
+        );
 
-    function getCardAttributes(
-        uint256 tokenId
-    ) external view returns (uint8 power, uint8 defense);
+    function getTotalSupplyByRarity(uint8 rarity) external view returns (uint256);
+    function getTotalSupplyByElement(string memory element) external view returns (uint256);
 }
