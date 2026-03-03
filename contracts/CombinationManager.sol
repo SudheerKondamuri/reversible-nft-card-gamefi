@@ -1,135 +1,213 @@
 // SPDX-License-Identifier: MIT
-pragma solidity ^0.8.19;
+pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "./interfaces/ICardNFT.sol";
 import "./libraries/ElementMatrix.sol";
 import "./libraries/RarityLogic.sol";
+import "./libraries/AttributeCalculator.sol";
 
-/**
- * @title CombinationManager
- * @dev Manages card combination rules, rewards, and game economics
- */
-contract CombinationManager is Ownable {
-    // Interfaces
+contract CombinationManager is Ownable, ReentrancyGuard {
     ICardNFT public cardNFT;
 
-    // Combination rules
-    struct CombinationRule {
-        uint8[] requiredElements;
-        uint8 minRarity;
-        uint256 fusionCost;
-        uint8 resultElement;
-        uint16 bonusMultiplier;
+    uint256 public constant MAX_GENERATION = 5;
+    uint256 public constant COOLDOWN_BLOCKS = 100; // Simulated cooldown for testing
+
+    mapping(address => uint256) public lastCombinationBlock;
+    mapping(address => uint256) public playerCombinationCount;
+
+    // Fused token ID => component tokens
+    struct FusedData {
+        uint256 tokenId1;
+        uint256 tokenId2;
+        bool isActive;
     }
+    mapping(uint256 => FusedData) public fusedCards;
+    mapping(uint256 => bool) public isLocked;
 
-    mapping(uint256 => CombinationRule) public combinationRules;
-    uint256 public ruleCounter;
-
-    // Events
-    event CombinationRuleAdded(
-        uint256 indexed ruleId,
-        uint8[] elements,
-        uint256 cost
+    event CardsCombined(
+        uint256 indexed newTokenId,
+        uint256 indexed tokenId1,
+        uint256 indexed tokenId2,
+        address owner,
+        string resultElement,
+        uint8 resultRarity
     );
-    event CombinationRuleUpdated(uint256 indexed ruleId);
-    event RewardsClaimed(address indexed player, uint256 amount);
 
-    constructor(address _cardNFT) {
+    event CardsFused(
+        uint256 indexed fusedTokenId,
+        uint256 indexed tokenId1,
+        uint256 indexed tokenId2,
+        address owner
+    );
+
+    event CardUnfused(
+        uint256 indexed fusedTokenId,
+        uint256 indexed tokenId1,
+        uint256 indexed tokenId2,
+        address owner
+    );
+
+    constructor(address _cardNFT) Ownable(msg.sender) {
         cardNFT = ICardNFT(_cardNFT);
     }
 
-    /**
-     * @dev Add a new combination rule
-     * @param requiredElements Array of required elements
-     * @param minRarity Minimum rarity required
-     * @param fusionCost Cost to perform fusion
-     * @param resultElement Resulting element after fusion
-     * @param bonusMultiplier Attribute bonus multiplier
-     */
-    function addCombinationRule(
-        uint8[] calldata requiredElements,
-        uint8 minRarity,
-        uint256 fusionCost,
-        uint8 resultElement,
-        uint16 bonusMultiplier
-    ) external onlyOwner {
-        // TODO: Validate inputs
-        uint256 ruleId = ruleCounter++;
-        CombinationRule storage rule = combinationRules[ruleId];
-
-        rule.minRarity = minRarity;
-        rule.fusionCost = fusionCost;
-        rule.resultElement = resultElement;
-        rule.bonusMultiplier = bonusMultiplier;
-
-        // TODO: Store required elements
-
-        emit CombinationRuleAdded(ruleId, requiredElements, fusionCost);
+    modifier applyCooldown() {
+        require(lastCombinationBlock[msg.sender] == 0 || block.number >= lastCombinationBlock[msg.sender] + COOLDOWN_BLOCKS, "Cooldown active");
+        _;
+        lastCombinationBlock[msg.sender] = block.number;
     }
 
-    /**
-     * @dev Update combination rule
-     * @param ruleId Rule ID to update
-     * @param fusionCost New fusion cost
-     * @param bonusMultiplier New bonus multiplier
-     */
-    function updateCombinationRule(
-        uint256 ruleId,
-        uint256 fusionCost,
-        uint16 bonusMultiplier
-    ) external onlyOwner {
-        // TODO: Implement rule update
-        require(ruleId < ruleCounter, "Invalid rule ID");
-        combinationRules[ruleId].fusionCost = fusionCost;
-        combinationRules[ruleId].bonusMultiplier = bonusMultiplier;
-
-        emit CombinationRuleUpdated(ruleId);
+    function _max(uint8 a, uint8 b) internal pure returns (uint8) {
+        return a > b ? a : b;
     }
 
-    /**
-     * @dev Get combination rule details
-     * @param ruleId Rule ID
-     * @return rule CombinationRule struct
-     */
-    function getCombinationRule(
-        uint256 ruleId
-    ) external view returns (CombinationRule memory) {
-        require(ruleId < ruleCounter, "Invalid rule ID");
-        return combinationRules[ruleId];
+    function getCombinationPreview(uint256 tokenId1, uint256 tokenId2)
+        public view returns (
+            string memory element,
+            uint16 attack,
+            uint16 defense,
+            uint8 rarity,
+            string memory ability,
+            uint8 generation
+        )
+    {
+        ( , uint8 rarity1, string memory el1, uint16 atk1, uint16 def1, , uint8 gen1) = cardNFT.getCardAttributes(tokenId1);
+        ( , uint8 rarity2, string memory el2, uint16 atk2, uint16 def2, , uint8 gen2) = cardNFT.getCardAttributes(tokenId2);
+
+        generation = _max(gen1, gen2) + 1;
+        
+        ElementMatrix.CombinationResult memory combo = ElementMatrix.getCombination(el1, el2);
+        element = combo.newElement;
+        ability = combo.newAbility;
+
+        // Note: passing 0 for blockTimestamp strictly for preview determinism
+        rarity = RarityLogic.getResultRarity(rarity1, rarity2, 0, msg.sender);
+
+        attack = AttributeCalculator.calculateAttack(atk1, atk2, rarity1, rarity2, combo.attackBonus, generation);
+        defense = AttributeCalculator.calculateDefense(def1, def2, rarity1, rarity2, combo.defenseBonus, generation);
     }
 
-    /**
-     * @dev Validate if cards can be combined
-     * @param cardIds Array of card IDs
-     * @return isValid Whether combination is valid
-     */
-    function validateCombination(
-        uint256[] calldata cardIds
-    ) external view returns (bool) {
-        // TODO: Implement validation logic against rules
-        return cardIds.length >= 2;
+    function isValidCombination(uint256 tokenId1, uint256 tokenId2) public view returns (bool) {
+        if (tokenId1 == tokenId2) return false;
+        if (isLocked[tokenId1] || isLocked[tokenId2]) return false;
+
+        address owner1 = cardNFT.ownerOf(tokenId1);
+        address owner2 = cardNFT.ownerOf(tokenId2);
+        
+        if (owner1 != owner2 || owner1 == address(0)) return false;
+
+        ( , , , , , , uint8 gen1) = cardNFT.getCardAttributes(tokenId1);
+        ( , , , , , , uint8 gen2) = cardNFT.getCardAttributes(tokenId2);
+        
+        if (gen1 >= MAX_GENERATION || gen2 >= MAX_GENERATION) return false;
+
+        return true;
     }
 
-    /**
-     * @dev Calculate fusion rewards
-     * @param cardIds Array of cards being fused
-     * @return rewards Reward amount in tokens
-     */
-    function calculateFusionRewards(
-        uint256[] calldata cardIds
-    ) external view returns (uint256) {
-        // TODO: Implement reward calculation
-        return cardIds.length * 100;
+    function combineCards(uint256 tokenId1, uint256 tokenId2, uint256[] calldata fuelCards) 
+        external nonReentrant applyCooldown returns (uint256 newTokenId) 
+    {
+        require(isValidCombination(tokenId1, tokenId2), "Invalid combination");
+        require(cardNFT.ownerOf(tokenId1) == msg.sender, "Not owner");
+
+        ( , uint8 r1, , , , , ) = cardNFT.getCardAttributes(tokenId1);
+        ( , uint8 r2, , , , , ) = cardNFT.getCardAttributes(tokenId2);
+
+        // Anti-hoarding: Progressive Fuel Cost
+        uint8 highestRarity = _max(r1, r2);
+        if (highestRarity >= RarityLogic.RARE) {
+            uint256 requiredFuel = highestRarity - 1; // 1 for Rare, 2 for Epic, 3 for Legendary
+            require(fuelCards.length >= requiredFuel, "Insufficient fuel provided");
+            for (uint i = 0; i < requiredFuel; i++) {
+                require(cardNFT.ownerOf(fuelCards[i]) == msg.sender, "Not owner of fuel");
+                ( , uint8 fuelRarity, , , , , ) = cardNFT.getCardAttributes(fuelCards[i]);
+                require(fuelRarity == RarityLogic.COMMON, "Fuel must be Common");
+                require(fuelCards[i] != tokenId1 && fuelCards[i] != tokenId2, "Fuel cannot be main cards");
+                cardNFT.burn(fuelCards[i]);
+            }
+        }
+
+        (string memory newElement, uint16 newAtk, uint16 newDef, , string memory newAbility, uint8 newGen) = getCombinationPreview(tokenId1, tokenId2);
+        
+        // Actual deterministic roll
+        uint8 newRarity = RarityLogic.getResultRarity(r1, r2, block.timestamp, msg.sender);
+
+        cardNFT.burn(tokenId1);
+        cardNFT.burn(tokenId2);
+
+        newTokenId = cardNFT.mintCardWithGen(
+            msg.sender,
+            string(abi.encodePacked("Combo-", newElement)),
+            newRarity,
+            newElement,
+            newAtk,
+            newDef,
+            newAbility,
+            newGen
+        );
+
+        playerCombinationCount[msg.sender]++;
+
+        emit CardsCombined(newTokenId, tokenId1, tokenId2, msg.sender, newElement, newRarity);
     }
 
-    /**
-     * @dev Claim player rewards
-     * @param amount Amount to claim
-     */
-    function claimRewards(uint256 amount) external {
-        // TODO: Implement reward claiming with token transfer
-        require(amount > 0, "Invalid amount");
-        emit RewardsClaimed(msg.sender, amount);
+    function fuseCards(uint256 tokenId1, uint256 tokenId2) 
+        external nonReentrant applyCooldown returns (uint256 fusedTokenId) 
+    {
+        require(isValidCombination(tokenId1, tokenId2), "Invalid combination");
+        require(cardNFT.ownerOf(tokenId1) == msg.sender, "Not owner");
+
+        isLocked[tokenId1] = true;
+        isLocked[tokenId2] = true;
+
+        (string memory newElement, uint16 newAtk, uint16 newDef, uint8 newRarity, string memory newAbility, uint8 newGen) = getCombinationPreview(tokenId1, tokenId2);
+        
+        // Ensure accurate deterministic roll
+        ( , uint8 r1, , , , , ) = cardNFT.getCardAttributes(tokenId1);
+        ( , uint8 r2, , , , , ) = cardNFT.getCardAttributes(tokenId2);
+        newRarity = RarityLogic.getResultRarity(r1, r2, block.timestamp, msg.sender);
+
+        fusedTokenId = cardNFT.mintCardWithGen(
+            msg.sender,
+            string(abi.encodePacked("Fused-", newElement)),
+            newRarity,
+            newElement,
+            newAtk,
+            newDef,
+            newAbility,
+            newGen
+        );
+
+        fusedCards[fusedTokenId] = FusedData({
+            tokenId1: tokenId1,
+            tokenId2: tokenId2,
+            isActive: true
+        });
+
+        playerCombinationCount[msg.sender]++;
+
+        emit CardsFused(fusedTokenId, tokenId1, tokenId2, msg.sender);
+    }
+
+    function unfuseCard(uint256 fusedTokenId) external nonReentrant {
+        require(cardNFT.ownerOf(fusedTokenId) == msg.sender, "Not owner");
+        require(fusedCards[fusedTokenId].isActive, "Not a valid fused card");
+
+        FusedData memory data = fusedCards[fusedTokenId];
+        
+        isLocked[data.tokenId1] = false;
+        isLocked[data.tokenId2] = false;
+
+        delete fusedCards[fusedTokenId];
+
+        cardNFT.burn(fusedTokenId);
+
+        emit CardUnfused(fusedTokenId, data.tokenId1, data.tokenId2, msg.sender);
+    }
+
+    function getPlayerCombinationCount(address player) external view returns (uint256) {
+        return playerCombinationCount[player];
     }
 }
