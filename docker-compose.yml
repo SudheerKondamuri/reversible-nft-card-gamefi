@@ -44,7 +44,7 @@ services:
   #     - "5001:5001"
   #     - "8080:8080"
 
-volumes:
+# volumes:
   # Define volumes if needed
   # ipfs_data:
   # blockchain_data:
