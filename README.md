@@ -1,57 +1,53 @@
-# Sample Hardhat 3 Beta Project (`node:test` and `viem`)
+# Advanced NFT Card Combination System
 
-This project showcases a Hardhat 3 Beta project using the native Node.js test runner (`node:test`) and the `viem` library for Ethereum interactions.
+Welcome to the **Reversible NFT Card GameFi** repository. This project pioneers a dual-layer smart contract GameFi architecture incorporating two separate mechanisms for NFT card combinations: traditional deflationary **burn-and-mint** and a novel, reversible **fusion** mechanism.
 
-To learn more about the Hardhat 3 Beta, please visit the [Getting Started guide](https://hardhat.org/docs/getting-started#getting-started-with-hardhat-3). To share your feedback, join our [Hardhat 3 Beta](https://hardhat.org/hardhat3-beta-telegram-group) Telegram group or [open an issue](https://github.com/NomicFoundation/hardhat/issues/new) in our GitHub issue tracker.
+## Features Built
+- **`CardNFT.sol`**: An advanced ERC721 tracking intrinsic `Card` metadata, rarity tiers, elements, generation counts, and real-time total supply mappings directly on-chain.
+- **`CombinationManager.sol`**: A stateless engine powering combinations using deterministic randomness (`RarityLogic`), Attribute calculations including Generation penalties (`AttributeCalculator`), and complex element combination matrices (`ElementMatrix`).
+- **Progressive Fuel**: A built-in anti-hoarding economic system requiring "Common" rarity cards to be burned to fuel higher-tier combinations.
+- **Reversible Fusions**: Players can lock/stake their component NFTs securely in the manager contract in return for a new "Fused" card. They can un-fuse at any point to retrieve the original items.
+- **Cooldown Limits**: A 100-block localized mapping mitigates botting, chaining, and rapid combination exploitation. 
 
-## Project Overview
+## Getting Started
 
-This example project includes:
+### Prerequisites
+- [Node.js](https://nodejs.org/) (v16.x or strictly compatible LTS versions)
+- [Hardhat](https://hardhat.org/) installed globally or managed locally
+- Docker Desktop
 
-- A simple Hardhat configuration file.
-- Foundry-compatible Solidity unit tests.
-- TypeScript integration tests using [`node:test`](nodejs.org/api/test.html), the new Node.js native test runner, and [`viem`](https://viem.sh/).
-- Examples demonstrating how to connect to different types of networks, including locally simulating OP mainnet.
+### Installation
+1. Clone the repository natively.
+2. Install all dependencies:
+```bash
+npm install
+```
+3. Compile the Solidity contracts (uses EVM Cancun rules + viaIR optimization):
+```bash
+npx hardhat compile
+```
 
-## Usage
-
-### Running Tests
-
-To run all the tests in the project, execute the following command:
-
-```shell
+## Running Tests
+An extensive test suite (`test/`) guarantees structural and logic compliance across 20 distinct boundary edge cases.
+```bash
 npx hardhat test
 ```
+*(To benchmark gas, prefix the command with `REPORT_GAS=true`)*
 
-You can also selectively run the Solidity or `node:test` tests:
+## Local Deployment & Docker
+A `scripts/deploy.js` file is provided which automatically spins up the `CardNFT` and `CombinationManager` contracts and natively assigns the manager Role before minting and seeding an initial Generation 0 batch.
 
-```shell
-npx hardhat test solidity
-npx hardhat test nodejs
+To run a persistent local development node identically matching Hardhat's environment using Docker Compose:
+```bash
+docker-compose up -d --build
 ```
 
-### Make a deployment to Sepolia
-
-This project includes an example Ignition module to deploy the contract. You can deploy this module to a locally simulated chain or to Sepolia.
-
-To run the deployment to a local chain:
-
-```shell
-npx hardhat ignition deploy ignition/modules/Counter.ts
+You can then execute subsequent deployments dynamically:
+```bash
+npx hardhat run scripts/deploy.js --network localhost
 ```
 
-To run the deployment to Sepolia, you need an account with funds to send the transaction. The provided Hardhat configuration includes a Configuration Variable called `SEPOLIA_PRIVATE_KEY`, which you can use to set the private key of the account you want to use.
-
-You can set the `SEPOLIA_PRIVATE_KEY` variable using the `hardhat-keystore` plugin or by setting it as an environment variable.
-
-To set the `SEPOLIA_PRIVATE_KEY` config variable using `hardhat-keystore`:
-
-```shell
-npx hardhat keystore set SEPOLIA_PRIVATE_KEY
-```
-
-After setting the variable, you can run the deployment with the Sepolia network:
-
-```shell
-npx hardhat ignition deploy --network sepolia ignition/modules/Counter.ts
-```
+## Documentation
+- `DESIGN.md`: Explains the macroeconomics of Burn-and-Mint versus Reversible Fusion.
+- `SECURITY.md`: Analyzes threat-vectors, reentrancy guards, and scaling architectures using VRF modules.
+- `GAS_REPORT.md`: Output of the native `hardhat-gas-reporter` plugin evaluating local EVM costs.
