@@ -1,36 +1,54 @@
 const hre = require("hardhat");
 
 async function main() {
-  console.log("Deploying Reversible NFT Card GameFi contracts...");
+  const [deployer] = await hre.ethers.getSigners();
+  console.log("Deploying contracts with the account:", deployer.address);
 
-  // TODO: Implement deployment logic
+  // Deploy CardNFT
+  const CardNFT = await hre.ethers.getContractFactory("CardNFT");
+  const cardNFT = await CardNFT.deploy();
+  await cardNFT.waitForDeployment();
+  const cardNFTAddress = await cardNFT.getAddress();
+  console.log("CardNFT deployed to:", cardNFTAddress);
 
-  try {
-    // Deploy CardNFT contract
-    console.log("Deploying CardNFT...");
-    const CardNFT = await hre.ethers.getContractFactory("CardNFT");
-    const cardNFT = await CardNFT.deploy();
-    await cardNFT.deployed();
-    console.log("CardNFT deployed to:", cardNFT.address);
+  // Deploy CombinationManager
+  const CombinationManager = await hre.ethers.getContractFactory("CombinationManager");
+  const combinationManager = await CombinationManager.deploy(cardNFTAddress);
+  await combinationManager.waitForDeployment();
+  console.log("CombinationManager deployed to:", await combinationManager.getAddress());
 
-    // Deploy CombinationManager contract
-    console.log("Deploying CombinationManager...");
-    const CombinationManager = await hre.ethers.getContractFactory("CombinationManager");
-    const combinationManager = await CombinationManager.deploy(cardNFT.address);
-    await combinationManager.deployed();
-    console.log("CombinationManager deployed to:", combinationManager.address);
+  // Authorize CombinationManager in CardNFT
+  await cardNFT.setManager(await combinationManager.getAddress(), true);
+  console.log("CombinationManager authorized to mint/burn.");
 
-    // TODO: Save deployment addresses
-    // TODO: Verify contracts on etherscan
+  // Seed Generation 0 Cards
+  console.log("Seeding initial Gen 0 cards for the dev address...");
+  const devAddress = deployer.address;
 
-    console.log("Deployment complete!");
-    console.log("Contracts deployed:");
-    console.log("- CardNFT:", cardNFT.address);
-    console.log("- CombinationManager:", combinationManager.address);
-  } catch (error) {
-    console.error("Deployment failed:", error);
-    process.exitCode = 1;
-  }
+  // Fire Set
+  await cardNFT.mintCardWithGen(devAddress, "Flame Spark", 1, "Fire", 3, 2, "Ignite", 0);
+  await cardNFT.mintCardWithGen(devAddress, "Ember Spirit", 1, "Fire", 4, 3, "Burn", 0);
+  await cardNFT.mintCardWithGen(devAddress, "Blazing Knight", 2, "Fire", 7, 6, "Shield Breaker", 0);
+
+  // Water Set
+  await cardNFT.mintCardWithGen(devAddress, "Water Droplet", 1, "Water", 2, 4, "Defensive", 0);
+  await cardNFT.mintCardWithGen(devAddress, "Tide Caller", 1, "Water", 3, 5, "Wave", 0);
+  await cardNFT.mintCardWithGen(devAddress, "Ocean Guardian", 2, "Water", 6, 9, "Barrier", 0);
+
+  // Earth Set
+  await cardNFT.mintCardWithGen(devAddress, "Stone Pebble", 1, "Earth", 2, 5, "Sturdy", 0);
+  await cardNFT.mintCardWithGen(devAddress, "Root Tender", 1, "Earth", 3, 4, "Growth", 0);
+
+  // Air Set
+  await cardNFT.mintCardWithGen(devAddress, "Breeze Wisp", 1, "Air", 4, 2, "Evasive", 0);
+
+  // Lightning Set
+  await cardNFT.mintCardWithGen(devAddress, "Thunder Strike", 2, "Lightning", 10, 4, "Shock", 0);
+
+  console.log("Deployment and seeding completed successfully.");
 }
 
-main();
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
