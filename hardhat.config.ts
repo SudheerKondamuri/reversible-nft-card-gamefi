@@ -1,38 +1,37 @@
-import hardhatToolboxViemPlugin from "@nomicfoundation/hardhat-toolbox-viem";
-import { configVariable, defineConfig } from "hardhat/config";
+import "@nomicfoundation/hardhat-toolbox";
+import { HardhatUserConfig } from "hardhat/config";
+import "hardhat-gas-reporter";
 
-export default defineConfig({
-  plugins: [hardhatToolboxViemPlugin],
+
+const config: HardhatUserConfig = {
   solidity: {
-    profiles: {
-      default: {
-        version: "0.8.28",
-      },
-      production: {
+    compilers: [
+      {
         version: "0.8.28",
         settings: {
+          evmVersion: "cancun",
+          viaIR: true,
           optimizer: {
             enabled: true,
             runs: 200,
           },
         },
-      },
-    },
+      }
+    ]
+  },
+  gasReporter: {
+    enabled: true,
+    outputFile: "GAS_REPORT.md",
+    noColors: true,
   },
   networks: {
-    hardhatMainnet: {
-      type: "edr-simulated",
-      chainType: "l1",
-    },
-    hardhatOp: {
-      type: "edr-simulated",
-      chainType: "op",
+    hardhat: {
     },
     sepolia: {
-      type: "http",
-      chainType: "l1",
-      url: configVariable("SEPOLIA_RPC_URL"),
-      accounts: [configVariable("SEPOLIA_PRIVATE_KEY")],
+      url: process.env.SEPOLIA_RPC_URL || "",
+      accounts: process.env.SEPOLIA_PRIVATE_KEY ? [process.env.SEPOLIA_PRIVATE_KEY] : [],
     },
   },
-});
+};
+
+export default config;
