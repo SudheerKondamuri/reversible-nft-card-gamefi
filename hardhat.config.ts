@@ -26,6 +26,12 @@ const config: HardhatUserConfig = {
   },
   networks: {
     hardhat: {
+      chainId: 31337
+    },
+    // Used by the deploy container; overrideable via HARDHAT_RPC_URL env var
+    localhost: {
+      url: process.env.HARDHAT_RPC_URL || "http://127.0.0.1:8545",
+      chainId: 31337,
     },
     sepolia: {
       url: process.env.SEPOLIA_RPC_URL || "",
