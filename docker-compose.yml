@@ -1,53 +1,63 @@
 version: '3.8'
 
 services:
-  # TODO: Add blockchain node service (if needed)
 
-  # Hardhat development environment
+  # ── 1. Hardhat node ───────────────────────────────────────────────────────
   hardhat:
     build:
       context: .
       dockerfile: docker/Dockerfile
     ports:
-      - "8545:8545"  # JSON-RPC
-      - "8546:8546"  # WebSocket
+      - "8545:8545"   # JSON-RPC (browser + MetaMask connects here)
+    volumes:
+      - shared_data:/shared
+    healthcheck:
+      # TCP connect check — node is ready when the port accepts connections
+      test:
+        - CMD
+        - node
+        - -e
+        - >
+          const s=require('net').connect(8545,'localhost',()=>{process.exit(0)});
+          s.on('error',()=>process.exit(1));
+          setTimeout(()=>process.exit(1),3000);
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 10s
+
+  # ── 2. Deploy contracts (runs once, then exits 0) ─────────────────────────
+  deploy:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    entrypoint: ["/usr/local/bin/deploy-entrypoint.sh"]
+    depends_on:
+      hardhat:
+        condition: service_healthy   # waits until hardhat node is accepting connections
+    environment:
+      HARDHAT_RPC_URL: http://hardhat:8545   # overrides the localhost network URL
+    volumes:
+      - shared_data:/shared              # writes addresses.json here
+
+  # ── 3. Next.js frontend ───────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      deploy:
+        condition: service_completed_successfully  # waits for deploy to exit 0
     environment:
       NODE_ENV: development
-      # TODO: Add environment variables
+      HOSTNAME: "0.0.0.0"   # makes Next.js listen on all interfaces
     volumes:
-      - .:/app
-      - /app/node_modules
-    command: npx hardhat node
+      - shared_data:/shared   # reads addresses.json to build .env.local
 
-  # TODO: Add backend service (if applicable)
-  # backend:
-  #   build:
-  #     context: ./backend
-  #   ports:
-  #     - "3000:3000"
-  #   depends_on:
-  #     - hardhat
-
-  # TODO: Add frontend service (if applicable)
-  # frontend:
-  #   build:
-  #     context: ./frontend
-  #   ports:
-  #     - "3001:3001"
-  #   depends_on:
-  #     - backend
-
-  # TODO: Add IPFS service for metadata (if needed)
-  # ipfs:
-  #   image: ipfs/go-ipfs:latest
-  #   ports:
-  #     - "5001:5001"
-  #     - "8080:8080"
-
-# volumes:
-  # Define volumes if needed
-  # ipfs_data:
-  # blockchain_data:
+volumes:
+  shared_data:   # shared between deploy (write) and frontend (read)
 
 networks:
   default:
