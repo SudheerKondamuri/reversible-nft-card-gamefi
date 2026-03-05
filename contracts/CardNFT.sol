@@ -6,9 +6,11 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/ICardNFT.sol";
 
 contract CardNFT is ERC721, Ownable, ICardNFT {
+    using Strings for uint256;
 
     uint256 private _tokenIdCounter;
 
+    mapping(uint256 => bool) private _exists;
     mapping(uint256 => Card) private _cards;
     mapping(uint8 => uint256) private _supplyByRarity;
     mapping(string => uint256) private _supplyByElement;
@@ -16,18 +18,39 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
     // Track authorized minters/burners (e.g. CombinationManager)
     mapping(address => bool) public isManager;
 
+    string private _baseTokenURI;
+
     modifier onlyManagerOrOwner() {
-        require(owner() == _msgSender() || isManager[_msgSender()], "Not authorized");
+        require(
+            owner() == _msgSender() || isManager[_msgSender()],
+            "Not authorized"
+        );
         _;
     }
 
-    constructor() 
-        ERC721("GameFiCard", "GFC") 
-        Ownable(msg.sender) 
-    {}
+    constructor() ERC721("GameFiCard", "GFC") Ownable(msg.sender) {}
 
     function setManager(address manager, bool status) external onlyOwner {
         isManager[manager] = status;
+    }
+
+    /// @notice Set the IPFS base URI, e.g. "ipfs://QmYourCIDHere/"
+    function setBaseURI(string memory baseURI) external onlyOwner {
+        _baseTokenURI = baseURI;
+    }
+
+    function _baseURI() internal view override returns (string memory) {
+        return _baseTokenURI;
+    }
+
+    function tokenURI(
+        uint256 tokenId
+    ) public view override returns (string memory) {
+        require(
+            _exists[tokenId],
+            "ERC721Metadata: URI query for nonexistent token"
+        );
+        return string(abi.encodePacked(_baseURI(), tokenId.toString()));
     }
 
     function _mintCardInternal(
@@ -47,6 +70,7 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         uint256 tokenId = _tokenIdCounter;
 
         _safeMint(to, tokenId);
+        _exists[tokenId] = true;
 
         _cards[tokenId] = Card({
             name: name,
@@ -76,7 +100,17 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         uint16 defense,
         string memory ability
     ) external onlyManagerOrOwner returns (uint256) {
-        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, 0);
+        return
+            _mintCardInternal(
+                to,
+                name,
+                rarity,
+                element,
+                attack,
+                defense,
+                ability,
+                0
+            );
     }
 
     function mintCardWithGen(
@@ -89,7 +123,17 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         string memory ability,
         uint8 generation
     ) external onlyManagerOrOwner returns (uint256) {
-        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, generation);
+        return
+            _mintCardInternal(
+                to,
+                name,
+                rarity,
+                element,
+                attack,
+                defense,
+                ability,
+                generation
+            );
     }
 
     function burn(uint256 tokenId) external onlyManagerOrOwner {
@@ -106,8 +150,12 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         emit SupplyUpdated(card.rarity, _supplyByRarity[card.rarity]);
     }
 
-    function getCardAttributes(uint256 tokenId) 
-        external view returns (
+    function getCardAttributes(
+        uint256 tokenId
+    )
+        external
+        view
+        returns (
             string memory name,
             uint8 rarity,
             string memory element,
@@ -115,19 +163,31 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
             uint16 defense,
             string memory ability,
             uint8 generation
-        ) 
+        )
     {
         // will revert if not minted (OpenZeppelin 5 requires ownerOf checks)
         require(_ownerOf(tokenId) != address(0), "Nonexistent token");
         Card memory card = _cards[tokenId];
-        return (card.name, card.rarity, card.element, card.attack, card.defense, card.ability, card.generation);
+        return (
+            card.name,
+            card.rarity,
+            card.element,
+            card.attack,
+            card.defense,
+            card.ability,
+            card.generation
+        );
     }
 
-    function getTotalSupplyByRarity(uint8 rarity) external view returns (uint256) {
+    function getTotalSupplyByRarity(
+        uint8 rarity
+    ) external view returns (uint256) {
         return _supplyByRarity[rarity];
     }
 
-    function getTotalSupplyByElement(string memory element) external view returns (uint256) {
+    function getTotalSupplyByElement(
+        string memory element
+    ) external view returns (uint256) {
         return _supplyByElement[element];
     }
 
