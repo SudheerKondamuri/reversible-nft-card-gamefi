@@ -5,6 +5,7 @@ export default buildModule("GameFiModule", (m) => {
   const { cardNFT, combinationManager } = m.useModule(CombinationManagerModule);
 
   const deployer = m.getAccount(0);
+  console.log("Deployer address:", deployer);
 
   // Authorize CombinationManager to mint/burn in CardNFT
   const authorizeManager = m.call(cardNFT, "setManager", [combinationManager, true], {

@@ -1,4 +1,5 @@
 import { useReadContracts } from 'wagmi';
+import { hardhat } from 'wagmi/chains';
 import { CARD_NFT_ABI, CARD_NFT_ADDRESS } from '../lib/contracts';
 
 export type CardData = {
@@ -19,6 +20,7 @@ export function useCardInventory(address: `0x${string}` | undefined, totalMinted
         abi: CARD_NFT_ABI,
         functionName: 'ownerOf',
         args: [BigInt(i + 1)],
+        chainId: hardhat.id,
     }));
 
     const { data: ownersData } = useReadContracts({
@@ -41,6 +43,7 @@ export function useCardInventory(address: `0x${string}` | undefined, totalMinted
         abi: CARD_NFT_ABI,
         functionName: 'getCardAttributes',
         args: [BigInt(id)],
+        chainId: hardhat.id,
     }));
 
     const { data: attrData } = useReadContracts({
