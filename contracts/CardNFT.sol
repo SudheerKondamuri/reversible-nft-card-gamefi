@@ -6,51 +6,44 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "./interfaces/ICardNFT.sol";
 
 contract CardNFT is ERC721, Ownable, ICardNFT {
-    using Strings for uint256;
 
     uint256 private _tokenIdCounter;
 
-    mapping(uint256 => bool) private _exists;
     mapping(uint256 => Card) private _cards;
     mapping(uint8 => uint256) private _supplyByRarity;
     mapping(string => uint256) private _supplyByElement;
-
-    // Track authorized minters/burners (e.g. CombinationManager)
+    
+    // Security: Stop locked cards from being traded
+    mapping(uint256 => bool) public isLocked;
+    
     mapping(address => bool) public isManager;
 
-    string private _baseTokenURI;
-
     modifier onlyManagerOrOwner() {
-        require(
-            owner() == _msgSender() || isManager[_msgSender()],
-            "Not authorized"
-        );
+        require(owner() == _msgSender() || isManager[_msgSender()], "Not authorized");
         _;
     }
 
-    constructor() ERC721("GameFiCard", "GFC") Ownable(msg.sender) {}
+    constructor() 
+        ERC721("GameFiCard", "GFC") 
+        Ownable(msg.sender) 
+    {}
 
     function setManager(address manager, bool status) external onlyOwner {
         isManager[manager] = status;
     }
 
-    /// @notice Set the IPFS base URI, e.g. "ipfs://QmYourCIDHere/"
-    function setBaseURI(string memory baseURI) external onlyOwner {
-        _baseTokenURI = baseURI;
+    function lockCard(uint256 tokenId) external onlyManagerOrOwner {
+        isLocked[tokenId] = true;
     }
 
-    function _baseURI() internal view override returns (string memory) {
-        return _baseTokenURI;
+    function unlockCard(uint256 tokenId) external onlyManagerOrOwner {
+        isLocked[tokenId] = false;
     }
 
-    function tokenURI(
-        uint256 tokenId
-    ) public view override returns (string memory) {
-        require(
-            _exists[tokenId],
-            "ERC721Metadata: URI query for nonexistent token"
-        );
-        return string(abi.encodePacked(_baseURI(), tokenId.toString()));
+    // Prevent transfer of locked cards
+    function _update(address to, uint256 tokenId, address auth) internal virtual override returns (address) {
+        require(!isLocked[tokenId], "Card is locked in escrow");
+        return super._update(to, tokenId, auth);
     }
 
     function _mintCardInternal(
@@ -70,7 +63,6 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         uint256 tokenId = _tokenIdCounter;
 
         _safeMint(to, tokenId);
-        _exists[tokenId] = true;
 
         _cards[tokenId] = Card({
             name: name,
@@ -79,7 +71,8 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
             attack: attack,
             defense: defense,
             ability: ability,
-            generation: generation
+            generation: generation,
+            lastUpdatedBlock: block.number
         });
 
         _supplyByRarity[rarity]++;
@@ -91,71 +84,30 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         return tokenId;
     }
 
-    function mintCard(
-        address to,
-        string memory name,
-        uint8 rarity,
-        string memory element,
-        uint16 attack,
-        uint16 defense,
-        string memory ability
-    ) external onlyManagerOrOwner returns (uint256) {
-        return
-            _mintCardInternal(
-                to,
-                name,
-                rarity,
-                element,
-                attack,
-                defense,
-                ability,
-                0
-            );
+    function mintCard(address to, string memory name, uint8 rarity, string memory element, uint16 attack, uint16 defense, string memory ability) external onlyManagerOrOwner returns (uint256) {
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, 0);
     }
 
-    function mintCardWithGen(
-        address to,
-        string memory name,
-        uint8 rarity,
-        string memory element,
-        uint16 attack,
-        uint16 defense,
-        string memory ability,
-        uint8 generation
-    ) external onlyManagerOrOwner returns (uint256) {
-        return
-            _mintCardInternal(
-                to,
-                name,
-                rarity,
-                element,
-                attack,
-                defense,
-                ability,
-                generation
-            );
+    function mintCardWithGen(address to, string memory name, uint8 rarity, string memory element, uint16 attack, uint16 defense, string memory ability, uint8 generation) external onlyManagerOrOwner returns (uint256) {
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, generation);
+    }
+
+    function mintSeasonalPromo(address to, string memory name, uint8 rarity, string memory element, uint16 attack, uint16 defense, string memory ability) external onlyOwner returns (uint256) {
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, 0);
     }
 
     function burn(uint256 tokenId) external onlyManagerOrOwner {
         Card memory card = _cards[tokenId];
-
         _supplyByRarity[card.rarity]--;
         _supplyByElement[card.element]--;
-
         delete _cards[tokenId];
-
         _burn(tokenId);
-
         emit CardBurned(tokenId);
         emit SupplyUpdated(card.rarity, _supplyByRarity[card.rarity]);
     }
 
-    function getCardAttributes(
-        uint256 tokenId
-    )
-        external
-        view
-        returns (
+    function getCardAttributes(uint256 tokenId) 
+        external view returns (
             string memory name,
             uint8 rarity,
             string memory element,
@@ -163,35 +115,31 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
             uint16 defense,
             string memory ability,
             uint8 generation
-        )
+        ) 
     {
-        // will revert if not minted (OpenZeppelin 5 requires ownerOf checks)
         require(_ownerOf(tokenId) != address(0), "Nonexistent token");
         Card memory card = _cards[tokenId];
-        return (
-            card.name,
-            card.rarity,
-            card.element,
-            card.attack,
-            card.defense,
-            card.ability,
-            card.generation
-        );
+
+        // Anti-Hoarding Mechanism: Decay System
+        uint256 blocksPassed = block.number - card.lastUpdatedBlock;
+        uint16 decay = uint16(blocksPassed / 1000);
+        
+        uint16 currentAttack = card.attack > decay ? card.attack - decay : 1;
+        if (currentAttack == 0) currentAttack = 1;
+        
+        uint16 currentDefense = card.defense > decay ? card.defense - decay : 1;
+        if (currentDefense == 0) currentDefense = 1;
+
+        return (card.name, card.rarity, card.element, currentAttack, currentDefense, card.ability, card.generation);
     }
 
-    function getTotalSupplyByRarity(
-        uint8 rarity
-    ) external view returns (uint256) {
-        return _supplyByRarity[rarity];
+
+    function refreshCard(uint256 tokenId) external onlyManagerOrOwner {
+        require(_ownerOf(tokenId) != address(0), "Nonexistent token");
+        _cards[tokenId].lastUpdatedBlock = block.number;
     }
 
-    function getTotalSupplyByElement(
-        string memory element
-    ) external view returns (uint256) {
-        return _supplyByElement[element];
-    }
-
-    function totalMinted() external view returns (uint256) {
-        return _tokenIdCounter;
-    }
+    function getTotalSupplyByRarity(uint8 rarity) external view returns (uint256) { return _supplyByRarity[rarity]; }
+    function getTotalSupplyByElement(string memory element) external view returns (uint256) { return _supplyByElement[element]; }
+    function totalMinted() external view returns (uint256) { return _tokenIdCounter; }
 }
