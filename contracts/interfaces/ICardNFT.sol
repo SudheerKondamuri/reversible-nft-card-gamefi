@@ -12,6 +12,7 @@ interface ICardNFT is IERC721 {
         uint16 defense;
         string ability;
         uint8 generation;
+        uint256 lastUpdatedBlock; // Added for Decay System
     }
 
     event CardMinted(
@@ -21,7 +22,7 @@ interface ICardNFT is IERC721 {
         uint8 rarity,
         string element
     );
-
+    
     event CardBurned(uint256 indexed tokenId);
 
     event SupplyUpdated(
@@ -50,7 +51,23 @@ interface ICardNFT is IERC721 {
         uint8 generation
     ) external returns (uint256);
 
+    // Anti-Deflation Mechanism: Seasonal Mints
+    function mintSeasonalPromo(
+        address to, 
+        string memory name, 
+        uint8 rarity, 
+        string memory element, 
+        uint16 attack, 
+        uint16 defense, 
+        string memory ability
+    ) external returns (uint256);
+
     function burn(uint256 tokenId) external;
+
+    // Escrow Lock controls
+    function lockCard(uint256 tokenId) external;
+    function unlockCard(uint256 tokenId) external;
+    function isLocked(uint256 tokenId) external view returns (bool);
 
     function getCardAttributes(uint256 tokenId) 
         external view returns (
@@ -65,4 +82,6 @@ interface ICardNFT is IERC721 {
 
     function getTotalSupplyByRarity(uint8 rarity) external view returns (uint256);
     function getTotalSupplyByElement(string memory element) external view returns (uint256);
+    // Add this to CardNFT.sol
+    function refreshCard(uint256 tokenId) external;
 }
