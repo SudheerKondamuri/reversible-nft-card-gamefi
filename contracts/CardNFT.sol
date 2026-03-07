@@ -8,6 +8,7 @@ import "./interfaces/ICardNFT.sol";
 contract CardNFT is ERC721, Ownable, ICardNFT {
 
     uint256 private _tokenIdCounter;
+    string private _baseTokenURI;
 
     mapping(uint256 => Card) private _cards;
     mapping(uint8 => uint256) private _supplyByRarity;
@@ -30,6 +31,14 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
 
     function setManager(address manager, bool status) external onlyOwner {
         isManager[manager] = status;
+    }
+
+    function setBaseURI(string memory _baseURI) external onlyOwner {
+        _setBaseURI(_baseURI);
+    }
+
+    function _setBaseURI(string memory _baseURI) internal {
+        _baseTokenURI = _baseURI;
     }
 
     function lockCard(uint256 tokenId) external onlyManagerOrOwner {
