@@ -3,12 +3,17 @@ pragma solidity ^0.8.20;
 
 import "@openzeppelin/contracts/token/ERC721/ERC721.sol";
 import "@openzeppelin/contracts/access/Ownable.sol";
+import "@openzeppelin/contracts/utils/Base64.sol";
+import "@openzeppelin/contracts/utils/Strings.sol";
 import "./interfaces/ICardNFT.sol";
 
 contract CardNFT is ERC721, Ownable, ICardNFT {
 
+    using Strings for uint256;
+    using Strings for uint16;
+    using Strings for uint8;
+
     uint256 private _tokenIdCounter;
-    string private _baseTokenURI;
 
     mapping(uint256 => Card) private _cards;
     mapping(uint8 => uint256) private _supplyByRarity;
@@ -18,6 +23,9 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
     mapping(uint256 => bool) public isLocked;
     
     mapping(address => bool) public isManager;
+
+    // IPFS image mapping: keccak256(element, rarity) => IPFS URI
+    mapping(bytes32 => string) private _imageURIs;
 
     modifier onlyManagerOrOwner() {
         require(owner() == _msgSender() || isManager[_msgSender()], "Not authorized");
@@ -33,12 +41,25 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         isManager[manager] = status;
     }
 
-    function setBaseURI(string memory _baseURI) external onlyOwner {
-        _setBaseURI(_baseURI);
+    // Register IPFS image URI for a given element + rarity combination
+    function setImageURI(string memory element, uint8 rarity, string memory uri) external onlyOwner {
+        _imageURIs[keccak256(abi.encodePacked(element, rarity))] = uri;
     }
 
-    function _setBaseURI(string memory _baseURI) internal {
-        _baseTokenURI = _baseURI;
+    // Batch register multiple image URIs at once
+    function setImageURIBatch(
+        string[] memory elements, 
+        uint8[] memory rarities, 
+        string[] memory uris
+    ) external onlyOwner {
+        require(elements.length == rarities.length && rarities.length == uris.length, "Array length mismatch");
+        for (uint256 i = 0; i < elements.length; i++) {
+            _imageURIs[keccak256(abi.encodePacked(elements[i], rarities[i]))] = uris[i];
+        }
+    }
+
+    function getImageURI(string memory element, uint8 rarity) public view returns (string memory) {
+        return _imageURIs[keccak256(abi.encodePacked(element, rarity))];
     }
 
     function lockCard(uint256 tokenId) external onlyManagerOrOwner {
@@ -142,11 +163,66 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         return (card.name, card.rarity, card.element, currentAttack, currentDefense, card.ability, card.generation);
     }
 
-
     function refreshCard(uint256 tokenId) external onlyManagerOrOwner {
         require(_ownerOf(tokenId) != address(0), "Nonexistent token");
         _cards[tokenId].lastUpdatedBlock = block.number;
     }
+
+    // ─── On-chain tokenURI with dynamic metadata + IPFS images ───
+
+    function tokenURI(uint256 tokenId) public view override returns (string memory) {
+        require(_ownerOf(tokenId) != address(0), "Nonexistent token");
+        Card memory card = _cards[tokenId];
+
+        // Apply decay for current stats
+        uint256 blocksPassed = block.number - card.lastUpdatedBlock;
+        uint16 decay = uint16(blocksPassed / 1000);
+        uint16 currentAttack = card.attack > decay ? card.attack - decay : 1;
+        uint16 currentDefense = card.defense > decay ? card.defense - decay : 1;
+        if (currentAttack == 0) currentAttack = 1;
+        if (currentDefense == 0) currentDefense = 1;
+
+        string memory imageURI = _imageURIs[keccak256(abi.encodePacked(card.element, card.rarity))];
+
+        string memory json = string(abi.encodePacked(
+            '{"name":"', card.name, ' #', tokenId.toString(), '",'
+            '"description":"A Gen ', uint256(card.generation).toString(), ' ', _rarityToString(card.rarity), ' ', card.element, ' card with ', uint256(currentAttack).toString(), ' ATK / ', uint256(currentDefense).toString(), ' DEF",'
+            '"image":"', imageURI, '",'
+            '"attributes":', _buildAttributes(card, currentAttack, currentDefense, tokenId),
+            '}'
+        ));
+
+        return string(abi.encodePacked(
+            "data:application/json;base64,",
+            Base64.encode(bytes(json))
+        ));
+    }
+
+    function _buildAttributes(Card memory card, uint16 currentAttack, uint16 currentDefense, uint256 tokenId) internal view returns (string memory) {
+        string memory lockedStr = isLocked[tokenId] ? "true" : "false";
+
+        return string(abi.encodePacked(
+            '[',
+            '{"trait_type":"Element","value":"', card.element, '"},',
+            '{"trait_type":"Rarity","value":"', _rarityToString(card.rarity), '"},',
+            '{"trait_type":"Attack","display_type":"number","value":', uint256(currentAttack).toString(), '},',
+            '{"trait_type":"Defense","display_type":"number","value":', uint256(currentDefense).toString(), '},',
+            '{"trait_type":"Generation","display_type":"number","value":', uint256(card.generation).toString(), '},',
+            '{"trait_type":"Special Ability","value":"', card.ability, '"},',
+            '{"trait_type":"Locked","value":"', lockedStr, '"}',
+            ']'
+        ));
+    }
+
+    function _rarityToString(uint8 rarity) internal pure returns (string memory) {
+        if (rarity == 1) return "Common";
+        if (rarity == 2) return "Rare";
+        if (rarity == 3) return "Epic";
+        if (rarity == 4) return "Legendary";
+        return "Unknown";
+    }
+
+    // ─── Supply tracking ───
 
     function getTotalSupplyByRarity(uint8 rarity) external view returns (uint256) { return _supplyByRarity[rarity]; }
     function getTotalSupplyByElement(string memory element) external view returns (uint256) { return _supplyByElement[element]; }
