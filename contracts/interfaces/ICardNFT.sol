@@ -84,4 +84,8 @@ interface ICardNFT is IERC721 {
     function getTotalSupplyByElement(string memory element) external view returns (uint256);
     // Add this to CardNFT.sol
     function refreshCard(uint256 tokenId) external;
+
+    function setImageURI(string memory element, uint8 rarity, string memory uri) external;
+    function setImageURIBatch(string[] memory elements, uint8[] memory rarities, string[] memory uris) external;
+    function getImageURI(string memory element, uint8 rarity) external view returns (string memory);
 }
