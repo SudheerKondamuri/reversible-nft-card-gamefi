@@ -43,7 +43,7 @@ contract CombinationManager is Ownable, ReentrancyGuard {
     }
 
     function getCombinationPreview(uint256 tokenId1, uint256 tokenId2)
-        public view returns (string memory element, uint16 attack, uint16 defense, uint8 rarity, string memory ability, uint8 generation)
+        public view returns (string memory element, uint16 attack, uint16 defense, uint8 rarity, string memory ability, uint8 generation, string memory name)
     {
         ( , uint8 rarity1, string memory el1, uint16 atk1, uint16 def1, , uint8 gen1) = cardNFT.getCardAttributes(tokenId1);
         ( , uint8 rarity2, string memory el2, uint16 atk2, uint16 def2, , uint8 gen2) = cardNFT.getCardAttributes(tokenId2);
@@ -52,6 +52,7 @@ contract CombinationManager is Ownable, ReentrancyGuard {
         
         ElementMatrix.CombinationResult memory combo = ElementMatrix.getCombination(el1, el2);
         element = combo.newElement;
+        name = combo.newName;
         ability = combo.newAbility;
         rarity = RarityLogic.getResultRarity(rarity1, rarity2, 0, msg.sender);
         attack = AttributeCalculator.calculateAttack(atk1, atk2, rarity1, rarity2, combo.attackBonus, generation);
@@ -97,13 +98,13 @@ contract CombinationManager is Ownable, ReentrancyGuard {
             }
         }
 
-        (string memory newElement, uint16 newAtk, uint16 newDef, , string memory newAbility, uint8 newGen) = getCombinationPreview(tokenId1, tokenId2);
+        (string memory newElement, uint16 newAtk, uint16 newDef, , string memory newAbility, uint8 newGen, string memory newName) = getCombinationPreview(tokenId1, tokenId2);
         uint8 newRarity = RarityLogic.getResultRarity(r1, r2, block.timestamp, msg.sender);
 
         cardNFT.burn(tokenId1);
         cardNFT.burn(tokenId2);
         
-        newTokenId = cardNFT.mintCardWithGen(msg.sender, string(abi.encodePacked("Combo-", newElement)), newRarity, newElement, newAtk, newDef, newAbility, newGen);
+        newTokenId = cardNFT.mintCardWithGen(msg.sender, newName, newRarity, newElement, newAtk, newDef, newAbility, newGen);
 
         playerCombinationCount[msg.sender]++;
         emit CardsCombined(newTokenId, tokenId1, tokenId2, msg.sender, newElement, newRarity);
@@ -119,13 +120,13 @@ contract CombinationManager is Ownable, ReentrancyGuard {
         cardNFT.lockCard(tokenId1);
         cardNFT.lockCard(tokenId2);
         
-        (string memory newElement, uint16 newAtk, uint16 newDef, uint8 newRarity, string memory newAbility, uint8 newGen) = getCombinationPreview(tokenId1, tokenId2);
+        (string memory newElement, uint16 newAtk, uint16 newDef, uint8 newRarity, string memory newAbility, uint8 newGen, string memory newName) = getCombinationPreview(tokenId1, tokenId2);
         ( , uint8 r1, , , , , ) = cardNFT.getCardAttributes(tokenId1);
         ( , uint8 r2, , , , , ) = cardNFT.getCardAttributes(tokenId2);
         
         newRarity = RarityLogic.getResultRarity(r1, r2, block.timestamp, msg.sender);
         
-        fusedTokenId = cardNFT.mintCardWithGen(msg.sender, string(abi.encodePacked("Fused-", newElement)), newRarity, newElement, newAtk, newDef, newAbility, newGen);
+        fusedTokenId = cardNFT.mintCardWithGen(msg.sender, newName, newRarity, newElement, newAtk, newDef, newAbility, newGen);
 
         fusedCards[fusedTokenId] = FusedData({
             tokenId1: tokenId1,
