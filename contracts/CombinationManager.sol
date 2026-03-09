@@ -104,7 +104,7 @@ contract CombinationManager is Ownable, ReentrancyGuard {
         cardNFT.burn(tokenId1);
         cardNFT.burn(tokenId2);
         
-        newTokenId = cardNFT.mintCardWithGen(msg.sender, newName, newRarity, newElement, newAtk, newDef, newAbility, newGen);
+        newTokenId = cardNFT.mintCardWithGenAndParents(msg.sender, newName, newRarity, newElement, newAtk, newDef, newAbility, newGen, tokenId1, tokenId2);
 
         playerCombinationCount[msg.sender]++;
         emit CardsCombined(newTokenId, tokenId1, tokenId2, msg.sender, newElement, newRarity);
@@ -126,7 +126,7 @@ contract CombinationManager is Ownable, ReentrancyGuard {
         
         newRarity = RarityLogic.getResultRarity(r1, r2, block.timestamp, msg.sender);
         
-        fusedTokenId = cardNFT.mintCardWithGen(msg.sender, newName, newRarity, newElement, newAtk, newDef, newAbility, newGen);
+        fusedTokenId = cardNFT.mintCardWithGenAndParents(msg.sender, newName, newRarity, newElement, newAtk, newDef, newAbility, newGen, tokenId1, tokenId2);
 
         fusedCards[fusedTokenId] = FusedData({
             tokenId1: tokenId1,
