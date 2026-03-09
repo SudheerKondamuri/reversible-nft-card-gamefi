@@ -24,8 +24,8 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
     
     mapping(address => bool) public isManager;
 
-    // IPFS image mapping: keccak256(element, rarity) => IPFS URI
-    mapping(bytes32 => string) private _imageURIs;
+    // Base URI for card images (e.g. ipfs://QmFolderCID/)
+    string private _baseImageURI;
 
     modifier onlyManagerOrOwner() {
         require(owner() == _msgSender() || isManager[_msgSender()], "Not authorized");
@@ -41,25 +41,14 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         isManager[manager] = status;
     }
 
-    // Register IPFS image URI for a given element + rarity combination
-    function setImageURI(string memory element, uint8 rarity, string memory uri) external onlyOwner {
-        _imageURIs[keccak256(abi.encodePacked(element, rarity))] = uri;
+    // Set the base image URI (e.g. "ipfs://QmFolderCID/")
+    // Images will be resolved as: baseImageURI + cardName + ".png"
+    function setBaseImageURI(string memory baseImageURI) external onlyOwner {
+        _baseImageURI = baseImageURI;
     }
 
-    // Batch register multiple image URIs at once
-    function setImageURIBatch(
-        string[] memory elements, 
-        uint8[] memory rarities, 
-        string[] memory uris
-    ) external onlyOwner {
-        require(elements.length == rarities.length && rarities.length == uris.length, "Array length mismatch");
-        for (uint256 i = 0; i < elements.length; i++) {
-            _imageURIs[keccak256(abi.encodePacked(elements[i], rarities[i]))] = uris[i];
-        }
-    }
-
-    function getImageURI(string memory element, uint8 rarity) public view returns (string memory) {
-        return _imageURIs[keccak256(abi.encodePacked(element, rarity))];
+    function getBaseImageURI() public view returns (string memory) {
+        return _baseImageURI;
     }
 
     function lockCard(uint256 tokenId) external onlyManagerOrOwner {
@@ -84,7 +73,9 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         uint16 attack,
         uint16 defense,
         string memory ability,
-        uint8 generation
+        uint8 generation,
+        uint256 parentId1,
+        uint256 parentId2
     ) internal returns (uint256) {
         require(rarity >= 1 && rarity <= 4, "Invalid rarity");
         require(attack > 0 && defense > 0, "Invalid stats");
@@ -102,7 +93,9 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
             defense: defense,
             ability: ability,
             generation: generation,
-            lastUpdatedBlock: block.number
+            lastUpdatedBlock: block.number,
+            parentId1: parentId1,
+            parentId2: parentId2
         });
 
         _supplyByRarity[rarity]++;
@@ -115,15 +108,19 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
     }
 
     function mintCard(address to, string memory name, uint8 rarity, string memory element, uint16 attack, uint16 defense, string memory ability) external onlyManagerOrOwner returns (uint256) {
-        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, 0);
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, 0, 0, 0);
     }
 
     function mintCardWithGen(address to, string memory name, uint8 rarity, string memory element, uint16 attack, uint16 defense, string memory ability, uint8 generation) external onlyManagerOrOwner returns (uint256) {
-        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, generation);
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, generation, 0, 0);
+    }
+
+    function mintCardWithGenAndParents(address to, string memory name, uint8 rarity, string memory element, uint16 attack, uint16 defense, string memory ability, uint8 generation, uint256 parentId1, uint256 parentId2) external onlyManagerOrOwner returns (uint256) {
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, generation, parentId1, parentId2);
     }
 
     function mintSeasonalPromo(address to, string memory name, uint8 rarity, string memory element, uint16 attack, uint16 defense, string memory ability) external onlyOwner returns (uint256) {
-        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, 0);
+        return _mintCardInternal(to, name, rarity, element, attack, defense, ability, 0, 0, 0);
     }
 
     function burn(uint256 tokenId) external onlyManagerOrOwner {
@@ -182,13 +179,13 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         if (currentAttack == 0) currentAttack = 1;
         if (currentDefense == 0) currentDefense = 1;
 
-        string memory imageURI = _imageURIs[keccak256(abi.encodePacked(card.element, card.rarity))];
+        string memory imageURI = string(abi.encodePacked(_baseImageURI, card.name, ".png"));
 
         string memory json = string(abi.encodePacked(
             '{"name":"', card.name, ' #', tokenId.toString(), '",'
-            '"description":"A Gen ', uint256(card.generation).toString(), ' ', _rarityToString(card.rarity), ' ', card.element, ' card with ', uint256(currentAttack).toString(), ' ATK / ', uint256(currentDefense).toString(), ' DEF",'
+            '"description":"A ', _rarityToString(card.rarity), ' ', card.element, ' element card with ', uint256(currentAttack).toString(), ' ATK / ', uint256(currentDefense).toString(), ' DEF",'
             '"image":"', imageURI, '",'
-            '"attributes":', _buildAttributes(card, currentAttack, currentDefense, tokenId),
+            '"attributes":', _buildAttributes(card, currentAttack, currentDefense),
             '}'
         ));
 
@@ -198,20 +195,34 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         ));
     }
 
-    function _buildAttributes(Card memory card, uint16 currentAttack, uint16 currentDefense, uint256 tokenId) internal view returns (string memory) {
-        string memory lockedStr = isLocked[tokenId] ? "true" : "false";
-
-        return string(abi.encodePacked(
+    function _buildAttributes(Card memory card, uint16 currentAttack, uint16 currentDefense) internal view returns (string memory) {
+        // Build base attributes
+        string memory attrs = string(abi.encodePacked(
             '[',
             '{"trait_type":"Element","value":"', card.element, '"},',
             '{"trait_type":"Rarity","value":"', _rarityToString(card.rarity), '"},',
             '{"trait_type":"Attack","display_type":"number","value":', uint256(currentAttack).toString(), '},',
             '{"trait_type":"Defense","display_type":"number","value":', uint256(currentDefense).toString(), '},',
             '{"trait_type":"Generation","display_type":"number","value":', uint256(card.generation).toString(), '},',
-            '{"trait_type":"Special Ability","value":"', card.ability, '"},',
-            '{"trait_type":"Locked","value":"', lockedStr, '"}',
-            ']'
+            '{"trait_type":"Special Ability","value":"', card.ability, '"}'
         ));
+
+        // Add parent card references if this is a fusion/combination card
+        if (card.parentId1 != 0 && card.parentId2 != 0) {
+            string memory parent1Name = _cards[card.parentId1].name;
+            string memory parent2Name = _cards[card.parentId2].name;
+            // Fallback if parent was burned (combine destroys originals)
+            if (bytes(parent1Name).length == 0) parent1Name = string(abi.encodePacked("Card #", card.parentId1.toString()));
+            if (bytes(parent2Name).length == 0) parent2Name = string(abi.encodePacked("Card #", card.parentId2.toString()));
+
+            attrs = string(abi.encodePacked(
+                attrs,
+                ',{"trait_type":"Parent Card 1","value":"', parent1Name, ' #', card.parentId1.toString(), '"}',
+                ',{"trait_type":"Parent Card 2","value":"', parent2Name, ' #', card.parentId2.toString(), '"}'
+            ));
+        }
+
+        return string(abi.encodePacked(attrs, ']'));
     }
 
     function _rarityToString(uint8 rarity) internal pure returns (string memory) {
