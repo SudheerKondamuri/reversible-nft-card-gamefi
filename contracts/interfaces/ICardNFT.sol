@@ -13,6 +13,8 @@ interface ICardNFT is IERC721 {
         string ability;
         uint8 generation;
         uint256 lastUpdatedBlock; // Added for Decay System
+        uint256 parentId1; // 0 = no parent (base card)
+        uint256 parentId2; // 0 = no parent (base card)
     }
 
     event CardMinted(
@@ -51,6 +53,19 @@ interface ICardNFT is IERC721 {
         uint8 generation
     ) external returns (uint256);
 
+    function mintCardWithGenAndParents(
+        address to,
+        string memory name,
+        uint8 rarity,
+        string memory element,
+        uint16 attack,
+        uint16 defense,
+        string memory ability,
+        uint8 generation,
+        uint256 parentId1,
+        uint256 parentId2
+    ) external returns (uint256);
+
     // Anti-Deflation Mechanism: Seasonal Mints
     function mintSeasonalPromo(
         address to, 
@@ -85,7 +100,6 @@ interface ICardNFT is IERC721 {
     // Add this to CardNFT.sol
     function refreshCard(uint256 tokenId) external;
 
-    function setImageURI(string memory element, uint8 rarity, string memory uri) external;
-    function setImageURIBatch(string[] memory elements, uint8[] memory rarities, string[] memory uris) external;
-    function getImageURI(string memory element, uint8 rarity) external view returns (string memory);
+    function setBaseImageURI(string memory baseImageURI) external;
+    function getBaseImageURI() external view returns (string memory);
 }
