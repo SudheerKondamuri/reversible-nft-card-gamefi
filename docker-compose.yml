@@ -1,25 +1,59 @@
 version: '3.8'
 
 services:
+  # ── 1. Local Hardhat blockchain node ─────────────────────────────────────────
   hardhat:
     build:
       context: .
       dockerfile: docker/Dockerfile
     ports:
-      - "8545:8545"  # JSON-RPC
-      - "8546:8546"  # WebSocket
+      - "8545:8545"
     environment:
       NODE_ENV: development
-    volumes:
-      - .:/app
-      - /app/node_modules
-    command: npx hardhat node
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8545"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
+      test: ["CMD-SHELL", "nc -z localhost 8545 || exit 1"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 5s
+    networks:
+      - gamefi
+
+  # ── 2. Deploy contracts + seed cards ─────────────────────────────────────────
+  deploy:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile
+    depends_on:
+      hardhat:
+        condition: service_healthy
+    environment:
+      HARDHAT_RPC_URL: http://hardhat:8545
+      BASE_IMAGE_URI: ${BASE_IMAGE_URI:-ipfs://PLACEHOLDER_CID/cards/}
+    volumes:
+      - shared:/shared
+    command: /usr/local/bin/deploy-entrypoint.sh
+    networks:
+      - gamefi
+
+  # ── 3. Next.js frontend ───────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/Dockerfile.frontend
+    ports:
+      - "3000:3000"
+    depends_on:
+      deploy:
+        condition: service_completed_successfully
+    volumes:
+      - shared:/shared
+    networks:
+      - gamefi
+
+volumes:
+  shared:
 
 networks:
-  default:
+  gamefi:
     name: gamefi-network

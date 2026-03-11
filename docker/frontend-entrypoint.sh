@@ -18,4 +18,4 @@ console.log('  CombinationManager: ', addr.COMBINATION_MANAGER_ADDRESS);
 "
 
 echo "Starting Next.js frontend..."
-exec npm run dev
+exec npm run dev -- --hostname 0.0.0.0
