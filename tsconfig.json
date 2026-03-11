@@ -1,17 +1,26 @@
 {
   "compilerOptions": {
-    "lib": [
-      "es2023"
-    ],
-    "module": "node16",
-    "target": "es2022",
-    "strict": true,
+    "target": "es2020",
+    "module": "commonjs",
     "esModuleInterop": true,
+    "forceConsistentCasingInFileNames": true,
+    "strict": true,
     "skipLibCheck": true,
-    "moduleResolution": "node16",
-    "outDir": "dist"
+    "resolveJsonModule": true
   },
-  "exclude": [
+  "ts-node": {
+    "transpileOnly": true,
+    "compilerOptions": {
+      "module": "commonjs"
+    }
+  },
+  "include": [
+    "./hardhat.config.ts",
+    "./ignition/**/*.ts",
+    "./test/**/*.ts",
+    "./scripts/**/*.ts"
+  ],
+   "exclude": [
     "frontend",
     "dist",
     "node_modules"
