@@ -147,17 +147,21 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         require(_ownerOf(tokenId) != address(0), "Nonexistent token");
         Card memory card = _cards[tokenId];
 
-        // Anti-Hoarding Mechanism: Decay System (capped at 75% of base stat)
-        uint256 blocksPassed = block.number - card.lastUpdatedBlock;
-        uint16 decay = uint16(blocksPassed / 1000);
+        // Anti-Hoarding Mechanism: Decay System — only for Rare+ (capped at 75% of base stat, 1 point per ~24h)
+        uint16 currentAttack = card.attack;
+        uint16 currentDefense = card.defense;
+        if (card.rarity > 1) {
+            uint256 blocksPassed = block.number - card.lastUpdatedBlock;
+            uint16 decay = uint16(blocksPassed / 7200);
 
-        uint16 minAttack = card.attack * 75 / 100;
-        uint16 currentAttack = card.attack > decay ? card.attack - decay : minAttack;
-        if (currentAttack < minAttack) currentAttack = minAttack;
+            uint16 minAttack = card.attack * 75 / 100;
+            currentAttack = card.attack > decay ? card.attack - decay : minAttack;
+            if (currentAttack < minAttack) currentAttack = minAttack;
 
-        uint16 minDefense = card.defense * 75 / 100;
-        uint16 currentDefense = card.defense > decay ? card.defense - decay : minDefense;
-        if (currentDefense < minDefense) currentDefense = minDefense;
+            uint16 minDefense = card.defense * 75 / 100;
+            currentDefense = card.defense > decay ? card.defense - decay : minDefense;
+            if (currentDefense < minDefense) currentDefense = minDefense;
+        }
 
         return (card.name, card.rarity, card.element, currentAttack, currentDefense, card.ability, card.generation);
     }
@@ -173,17 +177,21 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         require(_ownerOf(tokenId) != address(0), "Nonexistent token");
         Card memory card = _cards[tokenId];
 
-        // Apply decay for current stats (capped at 75% of base stat)
-        uint256 blocksPassed = block.number - card.lastUpdatedBlock;
-        uint16 decay = uint16(blocksPassed / 1000);
+        // Apply decay for current stats — only for Rare+ (capped at 75% of base stat, 1 point per ~24h)
+        uint16 currentAttack = card.attack;
+        uint16 currentDefense = card.defense;
+        if (card.rarity > 1) {
+            uint256 blocksPassed = block.number - card.lastUpdatedBlock;
+            uint16 decay = uint16(blocksPassed / 7200);
 
-        uint16 minAttack = card.attack * 75 / 100;
-        uint16 currentAttack = card.attack > decay ? card.attack - decay : minAttack;
-        if (currentAttack < minAttack) currentAttack = minAttack;
+            uint16 minAttack = card.attack * 75 / 100;
+            currentAttack = card.attack > decay ? card.attack - decay : minAttack;
+            if (currentAttack < minAttack) currentAttack = minAttack;
 
-        uint16 minDefense = card.defense * 75 / 100;
-        uint16 currentDefense = card.defense > decay ? card.defense - decay : minDefense;
-        if (currentDefense < minDefense) currentDefense = minDefense;
+            uint16 minDefense = card.defense * 75 / 100;
+            currentDefense = card.defense > decay ? card.defense - decay : minDefense;
+            if (currentDefense < minDefense) currentDefense = minDefense;
+        }
 
         string memory imageURI = string(abi.encodePacked(_baseImageURI, card.name, ".png"));
 
