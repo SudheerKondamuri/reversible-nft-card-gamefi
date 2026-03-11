@@ -1,145 +1,125 @@
-# Economic Model & Tokenomics
+# Economic Model
 
 ## Overview
 
-This document outlines the economic incentives, reward structures, and sustainability mechanisms for the Reversible NFT Card GameFi.
+The game operates a **pure NFT economy** — there is no ERC-20 game token. All costs are paid in cards (burned as fuel). This eliminates token volatility risk and keeps the economy fully on-chain and self-contained.
 
-## Token Economics
+---
 
-### Game Token (TODO: Name)
+## Combination Costs (Burn-and-Mint)
 
-- Purpose: In-game rewards, fusion costs, governance
-- Total Supply: TODO
-- Distribution:
-  - Initial Liquidity: TODO%
-  - Team: TODO%
-  - Rewards: TODO%
-  - Treasury: TODO%
+When two cards are combined, both input cards are permanently burned. Higher-rarity combinations also require fuel cards:
 
-### NFT Card Value
+| Highest input rarity | Fuel required |
+|---|---|
+| Common | 0 fuel cards |
+| Rare | 1 Common |
+| Epic | 2 Common |
+| Legendary | 3 Common |
 
-- Base value determined by rarity
-- Dynamic pricing based on supply/demand
-- Element scarcity factors
-- Composite card premiums
+> Fuel cards are Common-rarity cards burned alongside the two combination inputs.
 
-## Fusion Economics
+## Fuse / Unfuse Costs
 
-### Cost Structure
+| Action | Cost |
+|---|---|
+| Fuse | Free (cards are locked, not burned) |
+| Unfuse | Free (cards are unlocked, wrapper burned) |
 
-```
-Fusion Cost = Base Cost × Rarity Multiplier × Element Multiplier
-Base Cost = TODO tokens
-Rarity Multiplier:
-  - Common: 1.0x
-  - Uncommon: 1.5x
-  - Rare: 2.5x
-  - Epic: 4.0x
-  - Legendary: 6.0x
+---
 
-Element Multiplier:
-  - Standard: 1.0x
-  - Bonus Combinations: 0.8x
-  - Penalty Combinations: 1.2x
-```
+## Repair Costs
 
-### Reward Structure
+Repair resets a card's decay clock by burning a fuel card. Fuel rarity scales with the card being repaired:
 
-```
-Fusion Rewards = Base Reward × Rarity Bonus × Complexity Multiplier
+| Target rarity | Fuel required |
+|---|---|
+| Rare | 1 Common |
+| Epic | 1 Rare |
+| Legendary | 1 Rare |
 
-Base Reward = TODO tokens per card used
-Rarity Bonus:
-  - Common: 1.0x
-  - Uncommon: 1.2x
-  - Rare: 1.5x
-  - Epic: 2.0x
-  - Legendary: 3.0x
+> Common cards are fully exempt from decay and cannot be repaired (no need).
 
-Complexity Multiplier:
-  - 2 cards: 1.0x
-  - 3 cards: 1.3x
-  - 4 cards: 1.6x
-  - 5+ cards: 2.0x
-```
+---
 
-## Economic Balance
+## Decay System (Anti-Hoarding)
 
-### Inflation Control
+Rare, Epic, and Legendary cards lose stats over time if left unrepaired:
 
-- TODO: Define daily token emission caps
-- TODO: Implement decay mechanisms
-- TODO: Monitor reward-to-cost ratio
+- **Rate**: -1 ATK and -1 DEF per 7,200 blocks (~24 hours on Ethereum mainnet)
+- **Floor**: 75% of the card's base stats (max 25% loss)
+- **Reset**: Calling `repairCard` burns the fuel card and resets the decay clock to the current block
 
-### Deflation Mechanisms
+This creates ongoing demand for Common cards (as repair fuel) and incentivises active play.
 
-- Fusion costs burn tokens
-- TODO: Card burning events
-- TODO: Marketplace fees
+---
 
-### Stability Measures
+## Supply Dynamics
 
-- TODO: Price stabilization fund
-- TODO: Dynamic cost adjustment
-- TODO: Reward throttling
+### Deflationary Pressure
 
-## Player Economics
+- Every burn-and-mint combination removes 2 cards + N fuel cards from supply
+- Every repair removes 1 fuel card from supply
+- Cards burned due to irreversible combination accumulate as permanent supply reduction
 
-### Entry Cost
+### Inflationary Inputs
 
-- Starter pack: TODO tokens
-- Initial card drops: TODO tokens value
-- Time-to-profit: TODO days
+- Owner/manager minting of new base cards
+- Seasonal / promo mints via `mintSeasonalPromo`
 
-### Revenue Sources
+### Supply by Rarity
 
-- Fusion rewards: Primary
-- Trading commissions: Secondary
-- Staking rewards: Tertiary
-- Tournament prizes: Event-based
+- Tracked on-chain: `CardNFT.getTotalSupplyByRarity(rarity)`
+- Tracked on-chain: `CardNFT.getTotalSupplyByElement(element)`
 
-### Risk Factors
+---
 
-- Card value depreciation
-- Fusion outcome variance
-- Market volatility
-- Competition intensity
+## Combination Outcome Probabilities
 
-## Long-term Sustainability
+Rarity outcomes are pseudorandom (seeded by `block.timestamp + sender + input rarities`). Production deployments should replace this with Chainlink VRF.
 
-### Mechanics
+| Input combination | Possible outcomes |
+|---|---|
+| Common + Common | Common (50%) / Rare (50%) |
+| Common + Rare | Rare (100%) |
+| Common + Epic | Rare (70%) / Epic (30%) |
+| Common + Legendary | Epic (100%) |
+| Rare + Rare | Rare (40%) / Epic (60%) |
+| Rare + Epic | Epic (100%) |
+| Rare + Legendary | Epic (70%) / Legendary (30%) |
+| Epic + Epic | Epic (20%) / Legendary (80%) |
+| Epic + Legendary | Legendary (100%) |
+| Legendary + Legendary | Legendary (100%) |
 
-- Decreasing emission rate
-- Increasing utility demand
-- Seasonal events driving engagement
-- Expanding use cases
+---
 
-### Monitoring KPIs
+## Player Economy
 
-- Daily active users (DAU)
-- Average session length
-- Token velocity
-- Card turnover rate
-- Economic health ratio
+### Entry
 
-## Anti-Abuse Measures
+- Players receive base cards from the owner/manager (no on-chain purchase mechanism currently)
+- No entry fee enforced at the contract level
 
-- TODO: Rate limiting for rewards
-- TODO: KYC thresholds for large claims
-- TODO: Bot detection systems
-- TODO: Wash trading prevention
-- TODO: Sybil attack mitigation
+### Value Sources
 
-## Governance
+- Higher-rarity cards have stronger base stats
+- Rarity is scarce by construction (upgrade paths require burning lower-rarity cards)
+- Fused cards can be unfused — zero risk of permanent loss for the fuse path
 
-### Token Holders
+### Costs to Players
 
-- TODO: Define voting rights
-- TODO: Proposal thresholds
-- TODO: Upgrade mechanisms
+- Burning cards to combine (irreversible)
+- Burning fuel cards to repair high-value cards
+- Gas costs for all transactions
 
-### Community Treasury
+---
 
-- TODO: Fund allocation
-- TODO: Multi-sig requirements
-- TODO: Transparency reporting
+## Anti-Abuse
+
+| Measure | Implementation |
+|---|---|
+| Combine cooldown | `COOLDOWN_BLOCKS = 100` (~20 min) per player |
+| Max generation cap | `MAX_GENERATION = 5` — prevents infinite compounding |
+| Decay system | Discourages hoarding high-rarity cards without engagement |
+| Locked card transfers | Fused cards cannot be transferred while locked |
+| Fuel rarity matching | Repair cost scales with card value, preventing cheap resets |

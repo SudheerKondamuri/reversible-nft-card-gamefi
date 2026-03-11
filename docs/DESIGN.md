@@ -1,115 +1,151 @@
-# Reversible NFT Card GameFi - Design Documentation
+# Reversible NFT Card GameFi — Design Documentation
 
 ## Overview
 
-A blockchain-based card game featuring reversible NFT fusion mechanics, allowing players to combine and decompose cards while earning game economy rewards.
+A blockchain-based card game featuring dual-layer NFT combination mechanics: a deflationary **burn-and-mint** path and a reversible **fuse/unfuse** path. Cards decay over time to discourage hoarding, and players can repair cards by sacrificing fuel cards.
+
+---
 
 ## Architecture
 
-### Core Components
+### Core Contracts
 
-#### 1. CardNFT Contract
+#### `CardNFT.sol` (ERC721)
 
-- ERC721-based NFT implementation
-- Supports base cards and composite cards
-- Reversible fusion mechanics
-- Attributes: Element, Rarity, Power, Defense
+- Mints, burns, locks/unlocks, and refreshes cards
+- Stores on-chain metadata (name, rarity, element, attack, defense, ability, generation, parentIds)
+- Dynamic `tokenURI` with Base64-encoded JSON and IPFS image references
+- Tracks `lastUpdatedBlock` per card for the decay system
+- Access controlled by `onlyManagerOrOwner` modifier
 
-#### 2. CombinationManager Contract
+#### `CombinationManager.sol`
 
-- Manages fusion rules and constraints
-- Handles game economics
-- Calculates rewards and bonuses
-- Controls fusion costs
+- **Combine** (burn-and-mint): burns both input cards, mints a new composite card
+- **Fuse**: locks both input cards in escrow, mints a fused wrapper token
+- **Unfuse**: burns the wrapper, unlocks and returns both original cards
+- **Repair**: burns a fuel card to reset the target card's decay clock
+- Enforces per-player cooldowns (`COOLDOWN_BLOCKS = 100`) and max generation (`MAX_GENERATION = 5`)
 
-#### 3. Supporting Libraries
+### Supporting Libraries
 
-- **ElementMatrix**: Element advantage system and combination logic
-- **AttributeCalculator**: Stat calculation based on rarity and level
-- **RarityLogic**: Rarity tiers and drop rate management
+| Library | Responsibility |
+|---|---|
+| `ElementMatrix` | 14-element combination table → result element, name, ability, stat bonuses |
+| `AttributeCalculator` | Calculates attack/defense from parent stats, rarity bonuses, element bonuses, generation penalty |
+| `RarityLogic` | Rarity constants (1–4), pseudorandom rarity outcome for combinations |
 
-## Game Mechanics
+---
 
-### Card System
+## Card System
 
-- **Elements**: Fire, Water, Earth, Air, Light, Dark
-- **Rarity Tiers**: Common → Uncommon → Rare → Epic → Legendary
-- **Attributes**: Power, Defense (calculated from rarity)
+### Elements (14)
 
-### Fusion System
+`Fire`, `Water`, `Earth`, `Air`, `Lightning`, `Steam`, `Lava`, `Nature`, `Ice`, `Dust`, `Plasma`, `Storm`, `Magnetism`, `Thunder`
 
-- Combine 2+ cards into a single composite card
-- New card gains bonuses based on input cards
-- Fusion cost depends on rarity and element combination
-- Rewards awarded upon successful fusion
+### Rarity Tiers (4)
 
-### Reversal System
+| Value | Name | Badge colour |
+|---|---|---|
+| 1 | Common | Gray |
+| 2 | Rare | Blue |
+| 3 | Epic | Purple |
+| 4 | Legendary | Gold |
 
-- Decompose composite cards back to original components
-- Preserve component card integrity
-- Return fusion value to player
-- Component cards remain unchanged
-
-## Economic Model
-
-### Costs
-
-- TODO: Define fusion cost formula
-- TODO: Define element-specific multipliers
-- TODO: Define rarity-based scaling
-
-### Rewards
-
-- Base rewards per fusion
-- Rarity multipliers
-- Element bonus multipliers
-- Compound rewards for complex fusions
-
-### Token Distribution
-
-- Reward token (TODO: specify)
-- Claim mechanics
-- Distribution schedule
-
-## Data Structures
-
-### Card Struct
+### Card Struct (on-chain)
 
 ```solidity
 struct Card {
-    uint8 element;
-    uint8 rarity;
-    uint8 power;
-    uint8 defense;
-    uint256[] fusedCards;
-    bool isComposite;
+    string  name;
+    uint8   rarity;           // 1-4
+    string  element;
+    uint16  attack;
+    uint16  defense;
+    string  ability;
+    uint8   generation;       // 0 = base, max 5
+    uint256 lastUpdatedBlock; // decay clock
+    uint256 parentId1;
+    uint256 parentId2;
 }
 ```
 
-### CombinationRule Struct
+---
 
-```solidity
-struct CombinationRule {
-    uint8[] requiredElements;
-    uint8 minRarity;
-    uint256 fusionCost;
-    uint8 resultElement;
-    uint16 bonusMultiplier;
-}
+## Combination System
+
+### Burn-and-Mint (Combine)
+
+1. Player selects two eligible cards (same owner, not locked, generation < 5)
+2. Optional fuel cards required for higher-rarity combinations (Common fuel cards burned)
+3. Both input cards are permanently burned
+4. A new card is minted with calculated stats and a new element based on `ElementMatrix`
+5. `COOLDOWN_BLOCKS` enforced between combinations per player
+
+### Fuse / Unfuse
+
+1. Both cards are **locked** (non-transferable) and a fused wrapper NFT is minted
+2. Player retains the wrapper; both originals remain in their wallet but are locked
+3. **Unfuse** burns the wrapper and unlocks both originals — fully reversible at any time
+
+---
+
+## Decay System
+
+> **Only Rare, Epic, and Legendary cards decay. Common cards are fully exempt.**
+
+- Decay rate: **-1 attack & -1 defense per 7,200 blocks** (~24 hours on Ethereum mainnet at 12 s/block)
+- Hard floor: **75% of base stats** — a card can never lose more than 25% of its original stats
+- `lastUpdatedBlock` is read-only from the frontend via `getLastUpdatedBlock(tokenId)`
+- Stats are computed dynamically in `getCardAttributes()` and `tokenURI()` — nothing is stored mutably
+
+### Repair
+
+| Target rarity | Required fuel rarity |
+|---|---|
+| Rare | Common |
+| Epic | Rare |
+| Legendary | Rare |
+
+Repair calls `CombinationManager.repairCard(targetTokenId, fuelTokenId)`, which burns the fuel card and resets `lastUpdatedBlock` on the target via `CardNFT.refreshCard()`.
+
+---
+
+## Attribute Calculation
+
+```
+base        = (parent1.attack + parent2.attack) / 2
+rarityBonus = max(rarity1, rarity2)
+attack      = base + rarityBonus + elementBonus - generationPenalty  (min 1)
 ```
 
-## Integration Points
+Defense uses the identical formula. Generation penalty discourages infinite compounding.
 
-- TODO: External reward token
-- TODO: Oracle for randomization
-- TODO: Off-chain metadata service
-- TODO: Game server for state validation
+---
+
+## Frontend (Next.js 14)
+
+| Route | Feature |
+|---|---|
+| `/dashboard` | Card collection, filters, rarity chart |
+| `/combine` | Burn-and-mint or fuse mode selector |
+| `/unfuse` | Unfuse fused cards with cooldown timer |
+| `/repair` | Decay dashboard with block progress bars and fuel selection |
+| `/stats` | Supply analytics by rarity and element |
+| `/admin` | Owner-only mint and configuration |
+
+### Key Hooks
+
+- `usePlayerCards` — fetches owned cards + `lastUpdatedBlock` for Rare+ cards
+- `useCombinationContract` — combine, fuse, unfuse, repairCard write hooks
+- `useCombinationPreview` — live stat preview before combining
+- `useContractEvents` — live event feed
+
+---
 
 ## Future Enhancements
 
-- [ ] Battling system
+- [ ] Chainlink VRF for rarity randomness (currently pseudorandom via block data)
+- [ ] Battling / PvP system
 - [ ] Trading marketplace
 - [ ] Staking mechanics
-- [ ] Seasonal events
-- [ ] Special editions
+- [ ] Seasonal / promo card events
 - [ ] Cross-game compatibility
