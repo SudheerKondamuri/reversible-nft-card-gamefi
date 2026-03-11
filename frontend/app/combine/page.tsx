@@ -1,6 +1,6 @@
 'use client';
 
-import { useAccount } from 'wagmi';
+import { useAccount, useReadContract, useChainId } from 'wagmi';
 import { AppShell } from '@/components/layout/AppShell';
 import { CardDisplay } from '@/components/cards/CardDisplay';
 import { usePlayerCards } from '@/hooks/usePlayerCards';
@@ -8,6 +8,7 @@ import { useCombinationPreview } from '@/hooks/useCombinationPreview';
 import { useIsValidCombination, useCombineCards, useFuseCards } from '@/hooks/useCombinationContract';
 import { useGameStore } from '@/store/gameStore';
 import { type Card, RARITY_NAMES, ELEMENT_ICONS, ELEMENT_COLORS } from '@/types/contracts';
+import { CARD_NFT_ABI, getContractAddresses } from '@/lib/contracts';
 import { useMemo, useState } from 'react';
 import { ArrowRightLeft, X, Flame, Link2, AlertTriangle, CheckCircle, Loader2, ArrowRight, Trash2 } from 'lucide-react';
 
@@ -50,6 +51,19 @@ export default function CombinePage() {
 
     const isProcessing = combinePending || combineConfirming || fusePending || fuseConfirming;
     const isSuccess = combineSuccess || fuseSuccess;
+
+    // Base image URI for preview image
+    const chainId = useChainId();
+    const addresses = getContractAddresses(chainId);
+    const { data: rawBaseURI } = useReadContract({
+        address: addresses.cardNFT,
+        abi: CARD_NFT_ABI,
+        functionName: 'getBaseImageURI',
+    });
+    const baseImageURI = rawBaseURI
+        ? (rawBaseURI as string).replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+        : '';
+    const previewImageURL = preview && baseImageURI ? `${baseImageURI}${preview.name}.png` : null;
 
     // Fuel requirement
     const fuelRequired = useMemo(() => {
@@ -150,8 +164,52 @@ export default function CombinePage() {
                                     <div className="text-3xl">⚔️</div>
 
                                     {preview && (
-                                        <div className="glass rounded-2xl p-4 w-full animate-fade-in">
-                                            <h3 className="text-sm font-bold text-white text-center mb-3">Result Preview</h3>
+                                        <div className="glass rounded-2xl p-4 w-full animate-fade-in"
+                                            style={{
+                                                boxShadow: `0 0 20px 2px ${ELEMENT_COLORS[preview.element] || '#6366f1'}25`,
+                                                border: `1px solid ${ELEMENT_COLORS[preview.element] || '#6366f1'}30`,
+                                            }}
+                                        >
+                                            {/* Result label */}
+                                            <div className="flex items-center justify-center mb-3">
+                                                <span
+                                                    className="text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-full"
+                                                    style={{
+                                                        background: `${ELEMENT_COLORS[preview.element] || '#6366f1'}20`,
+                                                        color: ELEMENT_COLORS[preview.element] || '#a78bfa',
+                                                        border: `1px solid ${ELEMENT_COLORS[preview.element] || '#6366f1'}40`,
+                                                    }}
+                                                >✦ Result Preview</span>
+                                            </div>
+
+                                            {/* Preview image */}
+                                            <div
+                                                className="relative w-full aspect-[3/4] rounded-xl mb-3 overflow-hidden flex items-center justify-center"
+                                                style={{
+                                                    background: `linear-gradient(135deg, ${ELEMENT_COLORS[preview.element] || '#6366f1'}12, transparent)`,
+                                                    border: `1px solid ${ELEMENT_COLORS[preview.element] || '#6366f1'}20`,
+                                                }}
+                                            >
+                                                {previewImageURL ? (
+                                                    <img
+                                                        src={previewImageURL}
+                                                        alt={preview.name}
+                                                        className="w-full h-full object-cover"
+                                                        onError={(e) => {
+                                                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                                                            (e.currentTarget.nextSibling as HTMLElement).style.display = 'flex';
+                                                        }}
+                                                    />
+                                                ) : null}
+                                                <span
+                                                    className="text-4xl opacity-60"
+                                                    style={{ display: previewImageURL ? 'none' : 'flex' }}
+                                                >{ELEMENT_ICONS[preview.element] || '✨'}</span>
+                                                <div className="absolute top-2 right-2 bg-dark-900/80 backdrop-blur-sm rounded-lg px-2 py-1">
+                                                    <span className="text-[10px] font-bold text-slate-300">Gen {preview.generation}</span>
+                                                </div>
+                                            </div>
+
                                             <div className="space-y-2 text-xs">
                                                 <div className="flex justify-between">
                                                     <span className="text-slate-400">Name</span>
