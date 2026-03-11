@@ -45,14 +45,14 @@ contract CombinationManager is Ownable, ReentrancyGuard {
     function getCombinationPreview(uint256 tokenId1, uint256 tokenId2)
         public view returns (string memory element, uint16 attack, uint16 defense, uint8 rarity, string memory ability, uint8 generation, string memory name)
     {
-        (string memory name1, uint8 rarity1, string memory el1, uint16 atk1, uint16 def1, , uint8 gen1) = cardNFT.getCardAttributes(tokenId1);
-        (string memory name2, uint8 rarity2, string memory el2, uint16 atk2, uint16 def2, , uint8 gen2) = cardNFT.getCardAttributes(tokenId2);
+        ( , uint8 rarity1, string memory el1, uint16 atk1, uint16 def1, , uint8 gen1) = cardNFT.getCardAttributes(tokenId1);
+        ( , uint8 rarity2, string memory el2, uint16 atk2, uint16 def2, , uint8 gen2) = cardNFT.getCardAttributes(tokenId2);
         
         generation = _max(gen1, gen2) + 1;
         
         ElementMatrix.CombinationResult memory combo = ElementMatrix.getCombination(el1, el2);
         element = combo.newElement;
-        name = string(abi.encodePacked(name1, " + ", name2));
+        name = combo.newName;
         ability = combo.newAbility;
         rarity = RarityLogic.getResultRarity(rarity1, rarity2, 0, msg.sender);
         attack = AttributeCalculator.calculateAttack(atk1, atk2, rarity1, rarity2, combo.attackBonus, generation);
