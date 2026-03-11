@@ -6,7 +6,7 @@ import { hardhat, sepolia } from 'wagmi/chains';
 
 export const config = getDefaultConfig({
     appName: 'NFT Card Game',
-    projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || 'demo-project-id',
+    projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '279d8ee8fb8294bf51cb38019469668d',
     chains: [hardhat, sepolia],
     transports: {
         [hardhat.id]: http('http://127.0.0.1:8545'),
