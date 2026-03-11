@@ -10,6 +10,7 @@
 
 const fs = require('fs');
 const path = require('path');
+require('dotenv').config();
 
 const PINATA_JWT = process.env.PINATA_JWT;
 if (!PINATA_JWT) {
