@@ -33,6 +33,7 @@ export const CARD_NFT_ABI = [
     { inputs: [{ internalType: 'uint256', name: 'tokenId', type: 'uint256' }], name: 'lockCard', outputs: [], stateMutability: 'nonpayable', type: 'function' },
     { inputs: [{ internalType: 'uint256', name: 'tokenId', type: 'uint256' }], name: 'unlockCard', outputs: [], stateMutability: 'nonpayable', type: 'function' },
     { inputs: [{ internalType: 'uint256', name: 'tokenId', type: 'uint256' }], name: 'refreshCard', outputs: [], stateMutability: 'nonpayable', type: 'function' },
+    { inputs: [{ internalType: 'uint256', name: 'tokenId', type: 'uint256' }], name: 'getLastUpdatedBlock', outputs: [{ internalType: 'uint256', name: '', type: 'uint256' }], stateMutability: 'view', type: 'function' },
     { inputs: [{ internalType: 'address', name: 'manager', type: 'address' }, { internalType: 'bool', name: 'status', type: 'bool' }], name: 'setManager', outputs: [], stateMutability: 'nonpayable', type: 'function' },
     { inputs: [{ internalType: 'string', name: 'baseImageURI', type: 'string' }], name: 'setBaseImageURI', outputs: [], stateMutability: 'nonpayable', type: 'function' },
 ] as const;

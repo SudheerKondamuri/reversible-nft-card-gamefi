@@ -163,3 +163,33 @@ export function useUnfuseCard() {
 
     return { unfuse, status, hash, error, isPending, isConfirming, isSuccess, reset };
 }
+
+export function useRepairCard() {
+    const { address, abi } = useCombinationContract();
+    const { writeContract, data: hash, isPending, error, reset } = useWriteContract();
+    const { isLoading: isConfirming, isSuccess } = useWaitForTransactionReceipt({ hash });
+
+    const repair = useCallback(
+        (targetTokenId: bigint, fuelTokenId: bigint) => {
+            writeContract({
+                address,
+                abi,
+                functionName: 'repairCard',
+                args: [targetTokenId, fuelTokenId],
+            });
+        },
+        [writeContract, address, abi]
+    );
+
+    const status: TransactionStatus = isPending
+        ? 'pending'
+        : isConfirming
+            ? 'confirming'
+            : isSuccess
+                ? 'confirmed'
+                : error
+                    ? 'failed'
+                    : 'idle';
+
+    return { repair, status, hash, error, isPending, isConfirming, isSuccess, reset };
+}

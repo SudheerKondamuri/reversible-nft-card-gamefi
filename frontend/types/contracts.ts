@@ -14,6 +14,7 @@ export interface Card {
     isLocked: boolean;
     isFused: boolean;
     imageURI?: string;
+    lastUpdatedBlock?: bigint;
 }
 
 export interface FusedData {

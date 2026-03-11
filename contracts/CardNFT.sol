@@ -171,6 +171,11 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         _cards[tokenId].lastUpdatedBlock = block.number;
     }
 
+    function getLastUpdatedBlock(uint256 tokenId) external view returns (uint256) {
+        require(_ownerOf(tokenId) != address(0), "Nonexistent token");
+        return _cards[tokenId].lastUpdatedBlock;
+    }
+
     // ─── On-chain tokenURI with dynamic metadata + IPFS images ───
 
     function tokenURI(uint256 tokenId) public view override returns (string memory) {

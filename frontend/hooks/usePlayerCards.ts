@@ -82,6 +82,19 @@ export function usePlayerCards() {
                             // Not a fused card
                         }
 
+                        // Fetch lastUpdatedBlock for Rare+ cards (decay applies)
+                        let lastUpdatedBlock: bigint | undefined;
+                        if (attrs[1] > 1) {
+                            try {
+                                lastUpdatedBlock = await publicClient.readContract({
+                                    address: addresses.cardNFT,
+                                    abi: CARD_NFT_ABI,
+                                    functionName: 'getLastUpdatedBlock',
+                                    args: [i],
+                                }) as bigint;
+                            } catch { /* ignore */ }
+                        }
+
                         playerCards.push({
                             tokenId: i,
                             name: attrs[0],
@@ -94,6 +107,7 @@ export function usePlayerCards() {
                             isLocked: locked,
                             isFused,
                             imageURI: baseImageURI ? `${baseImageURI}${attrs[0]}.png` : undefined,
+                            lastUpdatedBlock,
                         });
                     }
                 } catch {

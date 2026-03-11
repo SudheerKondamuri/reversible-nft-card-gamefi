@@ -10,12 +10,14 @@ import {
     BarChart3,
     ShieldCheck,
     Swords,
+    Wrench,
 } from 'lucide-react';
 
 const navItems = [
     { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
     { href: '/combine', label: 'Combine', icon: Merge },
     { href: '/unfuse', label: 'Unfuse', icon: Unlink },
+    { href: '/repair', label: 'Repair', icon: Wrench },
     { href: '/stats', label: 'Stats', icon: BarChart3 },
     { href: '/admin', label: 'Admin', icon: ShieldCheck },
 ];

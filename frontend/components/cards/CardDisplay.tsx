@@ -3,7 +3,45 @@
 import React from 'react';
 import { clsx } from 'clsx';
 import { type Card, RARITY_NAMES, ELEMENT_COLORS, ELEMENT_ICONS } from '@/types/contracts';
-import { Lock, Link2 } from 'lucide-react';
+import { Lock, Link2, Clock } from 'lucide-react';
+
+const BLOCKS_PER_DECAY = 7200n;
+const SECONDS_PER_BLOCK = 12;
+
+function formatBlocksToTime(blocks: bigint): string {
+    const totalSeconds = Number(blocks) * SECONDS_PER_BLOCK;
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    if (hours > 0) return `${hours}h ${minutes}m`;
+    return `${minutes}m`;
+}
+
+function DecayTimer({ lastUpdatedBlock, currentBlock }: { lastUpdatedBlock: bigint; currentBlock: bigint }) {
+    const blocksPassed = currentBlock > lastUpdatedBlock ? currentBlock - lastUpdatedBlock : 0n;
+    const decayPoints = blocksPassed / BLOCKS_PER_DECAY;
+    const blocksUntilNext = BLOCKS_PER_DECAY - (blocksPassed % BLOCKS_PER_DECAY);
+
+    if (decayPoints === 0n) {
+        return (
+            <div className="flex items-center justify-between">
+                <span className="text-xs text-slate-500">Decay</span>
+                <span className="text-xs text-green-400 font-medium">✓ Full Power</span>
+            </div>
+        );
+    }
+
+    return (
+        <div className="flex items-center justify-between">
+            <span className="text-xs text-slate-500">Decay</span>
+            <div className="flex items-center gap-1.5">
+                <span className="text-xs text-red-400 font-medium">-{decayPoints.toString()} pts</span>
+                <span className="text-xs text-slate-500">·</span>
+                <Clock className="h-3 w-3 text-amber-400" />
+                <span className="text-xs text-amber-400 font-medium">+1 in {formatBlocksToTime(blocksUntilNext)}</span>
+            </div>
+        </div>
+    );
+}
 
 interface CardDisplayProps {
     card: Card;
@@ -11,6 +49,7 @@ interface CardDisplayProps {
     selectable?: boolean;
     onClick?: () => void;
     compact?: boolean;
+    currentBlock?: bigint;
 }
 
 export const CardDisplay = React.memo(function CardDisplay({
@@ -19,6 +58,7 @@ export const CardDisplay = React.memo(function CardDisplay({
     selectable = false,
     onClick,
     compact = false,
+    currentBlock,
 }: CardDisplayProps) {
     const rarityName = RARITY_NAMES[card.rarity] || 'Unknown';
     const elementColor = ELEMENT_COLORS[card.element] || '#6366f1';
@@ -157,6 +197,13 @@ export const CardDisplay = React.memo(function CardDisplay({
                     <p className="text-[11px] text-slate-400">
                         <span className="text-accent-glow font-semibold">⚡ {card.ability}</span>
                     </p>
+                </div>
+            )}
+
+            {/* Decay timer — only for Rare+ when currentBlock is available */}
+            {!compact && card.rarity > 1 && currentBlock !== undefined && card.lastUpdatedBlock !== undefined && (
+                <div className="mt-2 pt-2 border-t border-white/5">
+                    <DecayTimer lastUpdatedBlock={card.lastUpdatedBlock} currentBlock={currentBlock} />
                 </div>
             )}
         </div>
