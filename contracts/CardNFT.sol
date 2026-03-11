@@ -147,15 +147,17 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         require(_ownerOf(tokenId) != address(0), "Nonexistent token");
         Card memory card = _cards[tokenId];
 
-        // Anti-Hoarding Mechanism: Decay System
+        // Anti-Hoarding Mechanism: Decay System (capped at 75% of base stat)
         uint256 blocksPassed = block.number - card.lastUpdatedBlock;
         uint16 decay = uint16(blocksPassed / 1000);
-        
-        uint16 currentAttack = card.attack > decay ? card.attack - decay : 1;
-        if (currentAttack == 0) currentAttack = 1;
-        
-        uint16 currentDefense = card.defense > decay ? card.defense - decay : 1;
-        if (currentDefense == 0) currentDefense = 1;
+
+        uint16 minAttack = card.attack * 75 / 100;
+        uint16 currentAttack = card.attack > decay ? card.attack - decay : minAttack;
+        if (currentAttack < minAttack) currentAttack = minAttack;
+
+        uint16 minDefense = card.defense * 75 / 100;
+        uint16 currentDefense = card.defense > decay ? card.defense - decay : minDefense;
+        if (currentDefense < minDefense) currentDefense = minDefense;
 
         return (card.name, card.rarity, card.element, currentAttack, currentDefense, card.ability, card.generation);
     }
@@ -171,13 +173,17 @@ contract CardNFT is ERC721, Ownable, ICardNFT {
         require(_ownerOf(tokenId) != address(0), "Nonexistent token");
         Card memory card = _cards[tokenId];
 
-        // Apply decay for current stats
+        // Apply decay for current stats (capped at 75% of base stat)
         uint256 blocksPassed = block.number - card.lastUpdatedBlock;
         uint16 decay = uint16(blocksPassed / 1000);
-        uint16 currentAttack = card.attack > decay ? card.attack - decay : 1;
-        uint16 currentDefense = card.defense > decay ? card.defense - decay : 1;
-        if (currentAttack == 0) currentAttack = 1;
-        if (currentDefense == 0) currentDefense = 1;
+
+        uint16 minAttack = card.attack * 75 / 100;
+        uint16 currentAttack = card.attack > decay ? card.attack - decay : minAttack;
+        if (currentAttack < minAttack) currentAttack = minAttack;
+
+        uint16 minDefense = card.defense * 75 / 100;
+        uint16 currentDefense = card.defense > decay ? card.defense - decay : minDefense;
+        if (currentDefense < minDefense) currentDefense = minDefense;
 
         string memory imageURI = string(abi.encodePacked(_baseImageURI, card.name, ".png"));
 
