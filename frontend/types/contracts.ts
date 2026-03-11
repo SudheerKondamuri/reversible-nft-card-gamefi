@@ -13,6 +13,7 @@ export interface Card {
     generation: number;
     isLocked: boolean;
     isFused: boolean;
+    imageURI?: string;
 }
 
 export interface FusedData {

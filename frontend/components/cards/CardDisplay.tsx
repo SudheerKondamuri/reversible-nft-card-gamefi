@@ -72,7 +72,7 @@ export const CardDisplay = React.memo(function CardDisplay({
                 </span>
             </div>
 
-            {/* Card image placeholder */}
+            {/* Card image */}
             <div
                 className="relative w-full aspect-[3/4] rounded-xl mb-3 flex items-center justify-center overflow-hidden"
                 style={{
@@ -80,7 +80,21 @@ export const CardDisplay = React.memo(function CardDisplay({
                     border: `1px solid ${elementColor}15`,
                 }}
             >
-                <span className="text-5xl opacity-60">{elementIcon}</span>
+                {card.imageURI ? (
+                    <img
+                        src={card.imageURI}
+                        alt={card.name}
+                        className="w-full h-full object-cover"
+                        onError={(e) => {
+                            (e.currentTarget as HTMLImageElement).style.display = 'none';
+                            (e.currentTarget.nextSibling as HTMLElement).style.display = 'flex';
+                        }}
+                    />
+                ) : null}
+                <span
+                    className="text-5xl opacity-60"
+                    style={{ display: card.imageURI ? 'none' : 'flex' }}
+                >{elementIcon}</span>
                 {/* Generation badge */}
                 <div className="absolute top-2 right-2 bg-dark-900/80 backdrop-blur-sm rounded-lg px-2 py-1">
                     <span className="text-xs font-bold text-slate-300">Gen {card.generation}</span>

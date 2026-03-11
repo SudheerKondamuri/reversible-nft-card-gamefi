@@ -30,6 +30,17 @@ export function usePlayerCards() {
                 functionName: 'totalMinted',
             });
 
+            // Fetch base image URI once
+            const rawBaseURI = await publicClient.readContract({
+                address: addresses.cardNFT,
+                abi: CARD_NFT_ABI,
+                functionName: 'getBaseImageURI',
+            }) as string;
+            // Convert ipfs:// → Pinata gateway so browsers can load it
+            const baseImageURI = rawBaseURI.startsWith('ipfs://')
+                ? rawBaseURI.replace('ipfs://', 'https://gateway.pinata.cloud/ipfs/')
+                : rawBaseURI;
+
             const playerCards: Card[] = [];
 
             // Iterate through all token IDs and check ownership
@@ -82,6 +93,7 @@ export function usePlayerCards() {
                             generation: attrs[6],
                             isLocked: locked,
                             isFused,
+                            imageURI: baseImageURI ? `${baseImageURI}${attrs[0]}.png` : undefined,
                         });
                     }
                 } catch {
