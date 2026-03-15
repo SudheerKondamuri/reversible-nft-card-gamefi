@@ -1,5 +1,7 @@
 # Advanced NFT Card Combination System
 
+> 🎬 **Project Walkthrough**: [Watch on YouTube](https://www.youtube.com/watch?v=gBhSP5s6CPU)
+
 Welcome to the **Reversible NFT Card GameFi** repository. This project pioneers a dual-layer smart contract GameFi architecture incorporating two separate mechanisms for NFT card combinations: traditional deflationary **burn-and-mint** and a novel, reversible **fusion** mechanism.
 
 ## Features Built
